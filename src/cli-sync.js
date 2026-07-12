@@ -1,1 +1,0 @@
-import {runSync} from './sync.js';import {isAuthenticated} from './oauth.js';if(!await isAuthenticated()){console.error('Not authenticated. Start the server and connect Fitbit first.');process.exit(1)}console.log(JSON.stringify(await runSync(),null,2));

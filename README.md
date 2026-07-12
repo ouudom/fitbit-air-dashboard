@@ -2,7 +2,7 @@
 
 Personal local dashboard for Fitbit activity data through the Google Health API.
 
-Stack: Node.js API, PostgreSQL, Next.js 16 App Router, React 19, TypeScript.
+Stack: Next.js 16 App Router, React 19, TypeScript, Drizzle ORM, PostgreSQL.
 
 ## Run
 
@@ -14,25 +14,23 @@ cp .env.example .env
 # fill GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
 ```
 
-Start the API and frontend in separate terminals:
+Install dependencies, apply Drizzle migrations, and start Next.js:
 
 ```bash
 npm install
-npm start
-
-cd frontend
-npm install
+npm run db:migrate
 npm run dev
 ```
 
-Open http://localhost:3000. The API runs at http://localhost:8080. Add
-`http://localhost:8080/oauth/callback` as an authorized redirect URI in Google Cloud.
+Open http://localhost:3000. Add
+`http://localhost:3000/api/auth/callback` as an authorized redirect URI in Google Cloud.
 
-The API applies `db/migrations/001_initial.sql` at startup. Existing SQLite data is not imported.
+Drizzle owns the schema in `drizzle/schema.ts` and migrations in `drizzle/migrations/`. Existing SQLite data is not imported.
 
 ## Commands
 
-- `npm run dev` — API watch mode
-- `npm run sync` — command-line Fitbit sync
-- `npm run frontend:dev` — Next.js development server
-- `npm run frontend:build` — production frontend build
+- `npm run dev` — Next.js development server
+- `npm run build` — production build
+- `npm run db:generate` — generate a migration from schema changes
+- `npm run db:migrate` — apply migrations
+- `npm run db:studio` — open Drizzle Studio
