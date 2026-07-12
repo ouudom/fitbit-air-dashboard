@@ -1,0 +1,2 @@
+'use client';
+export function BarChart({data,color='#4f9dff',unit}:{data:{label:string;value:number|null}[];color?:string;unit?:string}){const max=Math.max(...data.map(x=>x.value??0),1);return data.length?<div className="chart">{data.map((x,i)=><div className="bar" key={`${x.label}-${i}`}><div className="barValue" title={`${x.value??0}${unit??''}`} style={{height:`${Math.max(3,(x.value??0)/max*100)}%`,background:color}}/><small>{x.label}</small></div>)}</div>:<div className="state">No chart data.</div>}

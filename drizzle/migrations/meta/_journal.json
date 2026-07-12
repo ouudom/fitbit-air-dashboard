@@ -8,6 +8,13 @@
       "when": 1783842042737,
       "tag": "0000_sharp_valkyrie",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783842938276,
+      "tag": "0001_groovy_cobalt_man",
+      "breakpoints": true
     }
   ]
 }

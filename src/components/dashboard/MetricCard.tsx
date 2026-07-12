@@ -1,0 +1,1 @@
+export function MetricCard({label,value,unit,detail}:{label:string;value:React.ReactNode;unit?:string;detail?:string}){return <div className="metricCard"><small>{label}</small><strong>{value}{unit&&<em>{unit}</em>}</strong>{detail&&<span>{detail}</span>}</div>}

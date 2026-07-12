@@ -1,0 +1,2 @@
+export async function api<T>(path:string):Promise<T>{const response=await fetch(path);if(!response.ok)throw Error(`${response.status} ${path}`);return response.json()}
+export async function post<T>(path:string,body:unknown):Promise<T>{const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!response.ok)throw Error(`${response.status} ${path}`);return response.json()}

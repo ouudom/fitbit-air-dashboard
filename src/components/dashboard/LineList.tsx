@@ -1,0 +1,1 @@
+export function LineList({data,unit}:{data:{label:string;value:number|null}[];unit?:string}){return <div className="lineList">{data.length?data.map((x,i)=><div key={`${x.label}-${i}`}><span>{x.label}</span><strong>{x.value==null?'—':x.value}{unit&&x.value!=null?` ${unit}`:''}</strong></div>):<div className="state">No records.</div>}</div>}

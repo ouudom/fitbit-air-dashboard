@@ -27,6 +27,10 @@ Open http://localhost:3000. Add
 
 Drizzle owns the schema in `drizzle/schema.ts` and migrations in `drizzle/migrations/`. Existing SQLite data is not imported.
 
+The expanded OAuth configuration requests read access for activity, health measurements, sleep, ECG, irregular-rhythm notifications, nutrition, location, profile, and settings. After changing scopes, connect Fitbit again so Google shows the new consent screen. The API stores supported records in `health_records`; unavailable device metrics are recorded as sync errors without stopping other metrics.
+
+Google's current data-type reference lists activity, sleep, heart rate, HRV, resting heart rate, oxygen saturation, respiratory rate, temperature, VO2 max, ECG, nutrition, weight, and related data types. See the [Google Health API data types](https://developers.google.com/health/data-types) and [scope reference](https://developers.google.com/health/scopes).
+
 ## Commands
 
 - `npm run dev` — Next.js development server
