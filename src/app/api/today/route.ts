@@ -1,0 +1,2 @@
+import {NextResponse} from 'next/server';import {getActivityData,getSleepData,getVitals} from '../../../lib/health-data';import {getMeta} from '../../../lib/db';
+export async function GET(){const [activity,sleep,vitals,lastSync]=await Promise.all([getActivityData(30),getSleepData(1),getVitals(),getMeta('lastSync')]);return NextResponse.json({activity,sleep,vitals,lastSync:lastSync?Number(lastSync):null})}

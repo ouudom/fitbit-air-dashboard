@@ -1,0 +1,1 @@
+export function ProgressRing({value,label,sub,color='#2f8064'}:{value:number;label:string;sub:string;color?:string}){const safe=Math.min(100,Math.max(0,value));return <div className="progressRing" style={{'--progress':`${safe*3.6}deg`,'--ring-color':color} as React.CSSProperties}><div className="ringInner"><strong>{label}</strong><span>{sub}</span></div></div>}

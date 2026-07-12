@@ -1,0 +1,2 @@
+import Link from 'next/link';import {LogoutButton} from './LogoutButton';
+export function Topbar(){return <header className="appTopbar"><Link href="/dashboard" className="brand"><span className="brandMark">✦</span><span>Fitbit Air</span></Link><div className="topbarActions"><Link href="/dashboard/data" className="desktopOnly topbarLink">All data</Link><span className="profileDot">V</span><LogoutButton/></div></header>}
