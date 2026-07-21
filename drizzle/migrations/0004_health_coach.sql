@@ -1,0 +1,16 @@
+ALTER TABLE "food_logs" ADD COLUMN "google_name" text;
+CREATE TABLE "daily_scores" ("date" text NOT NULL,"score_type" text NOT NULL,"model_version" text NOT NULL,"value" double precision,"confidence" text NOT NULL,"state" text NOT NULL,"inputs" jsonb NOT NULL,"explanation" jsonb NOT NULL,"updated_at" bigint NOT NULL,CONSTRAINT "daily_scores_date_score_type_model_version_pk" PRIMARY KEY("date","score_type","model_version"));
+CREATE TABLE "data_quality" ("date" text NOT NULL,"data_type" text NOT NULL,"status" text NOT NULL,"coverage" double precision,"reason" text,"updated_at" bigint NOT NULL,CONSTRAINT "data_quality_date_data_type_pk" PRIMARY KEY("date","data_type"));
+CREATE TABLE "timeline_events" ("id" text PRIMARY KEY NOT NULL,"date" text NOT NULL,"event_type" text NOT NULL,"title" text NOT NULL,"start_time" text,"end_time" text,"source" text NOT NULL,"source_id" text,"payload" jsonb NOT NULL,"updated_at" bigint NOT NULL);
+CREATE TABLE "journal_entries" ("id" text PRIMARY KEY NOT NULL,"date" text NOT NULL,"occurred_at" text,"habit" text NOT NULL,"value" text NOT NULL,"notes" text,"created_at" bigint NOT NULL,"updated_at" bigint NOT NULL);
+CREATE TABLE "strength_sessions" ("id" text PRIMARY KEY NOT NULL,"date" text NOT NULL,"title" text NOT NULL,"start_time" text,"duration_s" integer,"notes" text,"created_at" bigint NOT NULL,"updated_at" bigint NOT NULL);
+CREATE TABLE "strength_sets" ("id" text PRIMARY KEY NOT NULL,"session_id" text NOT NULL,"exercise" text NOT NULL,"set_index" integer NOT NULL,"reps" integer,"load_kg" double precision,"rpe" double precision,"created_at" bigint NOT NULL);
+CREATE TABLE "goals" ("id" text PRIMARY KEY NOT NULL,"goal_type" text NOT NULL,"title" text NOT NULL,"target" double precision,"unit" text,"active" boolean DEFAULT true NOT NULL,"created_at" bigint NOT NULL,"updated_at" bigint NOT NULL);
+CREATE TABLE "coach_threads" ("id" text PRIMARY KEY NOT NULL,"title" text NOT NULL,"created_at" bigint NOT NULL,"updated_at" bigint NOT NULL);
+CREATE TABLE "coach_messages" ("id" text PRIMARY KEY NOT NULL,"thread_id" text NOT NULL,"role" text NOT NULL,"content" text NOT NULL,"citations" jsonb NOT NULL,"created_at" bigint NOT NULL);
+CREATE TABLE "sync_cursors" ("data_type" text PRIMARY KEY NOT NULL,"cursor" text,"last_successful_at" bigint,"updated_at" bigint NOT NULL);
+CREATE TABLE "write_operations" ("id" text PRIMARY KEY NOT NULL,"data_type" text NOT NULL,"method" text NOT NULL,"status" text NOT NULL,"request" jsonb NOT NULL,"response" jsonb,"error" text,"created_at" bigint NOT NULL,"updated_at" bigint NOT NULL);
+CREATE INDEX "timeline_events_date_idx" ON "timeline_events" ("date");
+CREATE INDEX "journal_entries_date_idx" ON "journal_entries" ("date");
+CREATE INDEX "strength_sets_session_idx" ON "strength_sets" ("session_id");
+CREATE INDEX "coach_messages_thread_idx" ON "coach_messages" ("thread_id");

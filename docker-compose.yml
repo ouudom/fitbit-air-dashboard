@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fitbit_air
+      POSTGRES_USER: fitbit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - fitbit_air_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fitbit -d fitbit_air"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://fitbit:${POSTGRES_PASSWORD}@db:5432/fitbit_air
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+  scheduler:
+    image: curlimages/curl:8.13.0
+    restart: unless-stopped
+    environment:
+      CRON_SECRET: ${CRON_SECRET}
+    depends_on:
+      - app
+    command: ["sh","-c","while true; do sleep 3600; curl -fsS -X POST -H 'Authorization: Bearer '$$CRON_SECRET http://app:3000/api/cron/sync || true; done"]
+volumes:
+  fitbit_air_db:

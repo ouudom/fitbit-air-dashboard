@@ -1,0 +1,2 @@
+import {NextRequest,NextResponse} from 'next/server';import {config} from '../../../../lib/config';import {runSync} from '../../../../lib/sync';import {computeScoreRange} from '../../../../lib/scoring';
+export async function POST(req:NextRequest){if(!config.cronSecret||req.headers.get('authorization')!==`Bearer ${config.cronSecret}`)return NextResponse.json({error:'UNAUTHORIZED'},{status:401});const sync=await runSync(3,{full:true});sync.scoreDays=await computeScoreRange(3);return NextResponse.json(sync)}
