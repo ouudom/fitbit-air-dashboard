@@ -1,48 +1,99 @@
 # LifeStats
 
-Private, Bevel-inspired web health coach using Fitbit data from Google Health API. Includes explained Recovery, Sleep, Strain, physiological Stress, Energy, Timeline, Trends, Journal, Strength, Nutrition, Health Monitor, and evidence-grounded AI coach.
+Personal health dashboard. Laravel serves Inertia pages and owns persistence, OAuth, sync, scoring, and write operations. React renders dashboard UI. PostgreSQL schema remains compatible with earlier Next.js/Drizzle deployment.
 
-Stack: Next.js 16 App Router, React 19, TypeScript, Drizzle ORM, PostgreSQL.
+## Stack
 
-## Run
+- PHP 8.5
+- Laravel 13
+- Inertia 3
+- React 19 + TypeScript
+- Vite 8
+- PostgreSQL 17
+- FrankenPHP production runtime
 
-Create a PostgreSQL database and user, then configure `.env`:
+## Modular structure
+
+```text
+app/
+├── Domain/
+│   ├── Analytics/   # queries, wellness scoring, journal insights
+│   ├── Coach/       # provider boundary, context, response streaming
+│   └── Health/      # Google API, OAuth, crypto, sync, write operations
+├── Http/
+│   ├── Controllers/ # thin Inertia and mutation endpoints
+│   └── Middleware/  # Inertia props and health-session gate
+├── Jobs/            # queued health synchronization
+└── Models/          # legacy-schema Eloquent mappings
+resources/js/
+├── components/      # reusable UI and chart primitives
+├── layouts/         # application shell
+├── pages/           # route-level Inertia pages
+└── types/           # shared TypeScript contracts
+```
+
+Domain code must not depend on React or controllers. Controllers validate input and delegate work. External services sit behind domain clients/contracts. Legacy models keep millisecond timestamps, string IDs, and existing column names.
+
+## Local setup
+
+Requirements: PHP 8.5 with PDO PostgreSQL, Composer 2, Node.js 22, npm, PostgreSQL 17.
 
 ```bash
-createdb fitbit_air
 cp .env.example .env
-# fill GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
+composer install
+npm install
+php artisan key:generate
+php artisan migrate
+composer run dev
 ```
 
-Install dependencies, apply Drizzle migrations, and start Next.js:
+Set `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `REDIRECT_URI`, and required Google Health scopes in `.env`. Set `TOKEN_ENCRYPTION_KEY` to old deployment value before reading legacy encrypted tokens. `composer run dev` starts web server, queue listener, log viewer, and Vite.
+
+Useful checks:
 
 ```bash
-npm install
-npm run db:migrate
-npm run dev
+php artisan test
+./vendor/bin/pint --test
+npm run build
 ```
 
-Open http://localhost:3000. Add
-`http://localhost:3000/api/auth/callback` as an authorized redirect URI in Google Cloud.
+## Docker
 
-Generate unique `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY`, `CRON_SECRET`, and optionally configure the AI coach with `LLM_API_KEY`, `LLM_MODEL`, and `LLM_BASE_URL`. The provider must expose an OpenAI-compatible Responses API at `{LLM_BASE_URL}/responses` and accept Bearer authentication. `OPENAI_API_KEY` and `OPENAI_MODEL` remain legacy fallbacks. Changed Google scopes require reconnecting Fitbit and granting consent again.
+Copy and configure environment first. Never use example database password in production.
 
-Drizzle owns the schema in `drizzle/schema.ts` and migrations in `drizzle/migrations/`. Existing SQLite data is not imported.
+```bash
+cp .env.example .env
+docker compose build
+docker compose up -d
+docker compose exec app php artisan migrate --force
+docker compose ps
+```
 
-The expanded OAuth configuration requests read access for activity, health measurements, sleep, ECG, irregular-rhythm notifications, nutrition, location, profile, and settings. After changing scopes, connect Fitbit again so Google shows the new consent screen. The API stores supported records in `health_records`; unavailable device metrics are recorded as sync errors without stopping other metrics.
+App binds to `127.0.0.1:3000`. Compose runs PostgreSQL, FrankenPHP app, queue worker, and scheduler. Route public traffic through existing Tailscale Serve or reverse proxy. Health endpoint: `/up`.
 
-Google's current data-type reference lists activity, sleep, heart rate, HRV, resting heart rate, oxygen saturation, respiratory rate, temperature, VO2 max, ECG, nutrition, weight, and related data types. See the [Google Health API data types](https://developers.google.com/health/data-types) and [scope reference](https://developers.google.com/health/scopes).
+## Existing database cutover
 
-## Commands
+Warning: database contains irreplaceable health history. Do not run `migrate:fresh`, reset migrations, or delete the PostgreSQL volume.
 
-- `npm run dev` — Next.js development server
-- `npm run build` — production build
-- `npm run db:generate` — generate a migration from schema changes
-- `npm run db:migrate` — apply migrations
-- `npm run db:studio` — open Drizzle Studio
+1. Stop old scheduler and writes.
+2. Take verified PostgreSQL backup.
+3. Preserve old `TOKEN_ENCRYPTION_KEY`, `SESSION_SECRET`, OAuth credentials, and callback URL.
+4. Point Laravel at copied database first. Run `php artisan migrate --pretend` and inspect SQL.
+5. Run additive migrations with `php artisan migrate --force`.
+6. Verify bound `healthUserId`, token decryption, dashboard totals, scoring fixtures, and one controlled sync.
+7. Switch traffic. Keep old image and backup available for rollback.
 
-## Home server
+The LifeStats baseline migration creates only missing tables. Its rollback intentionally drops nothing. New schema changes must remain additive until parity and rollback window finish.
 
-Set `POSTGRES_PASSWORD`. Use HTTPS Tailscale hostname for `NEXT_PUBLIC_APP_URL` and `REDIRECT_URI`. Run `docker compose up -d --build`. App binds only to loopback; publish through Tailscale Serve. Scheduler performs hourly sync. Back up `fitbit_air_db` Docker volume.
+## Runtime operations
 
-Scores are wellness estimates, not medical guidance. See `SCORING.md` for formula versioning, baseline gates, and confidence rules.
+```bash
+php artisan queue:work --tries=3 --timeout=900
+php artisan schedule:work
+php artisan route:list
+php artisan migrate:status
+```
+
+OAuth session protects dashboard routes. API-style requests receive `401 {"error":"NOT_AUTHENTICATED"}`. Browser requests redirect to `/login`.
+
+See [SCORING.md](SCORING.md) for model contract and safety limits.

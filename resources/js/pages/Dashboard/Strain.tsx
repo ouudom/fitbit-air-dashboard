@@ -1,0 +1,4 @@
+import { Head } from '@inertiajs/react';
+import { Contributions, Empty, PageHeader, ScoreCard, Section } from '../../components/ui';
+import type { DailyScore } from '../../types';
+export default function Strain({scores=[]}:{scores:DailyScore[]}){return <><Head title="Strain & energy"/><main><PageHeader eyebrow="Load" title="Strain & energy" subtitle="Movement load, physiological stress, and available energy."/><div className="scoreGrid">{scores.map(s=><ScoreCard key={s.type} score={s}/>)}</div>{scores.length?scores.map(score=><Section key={score.type} title={`${score.type[0].toUpperCase()+score.type.slice(1)} inputs`}>{score.contributions.length?<Contributions score={score}/>:<p className="bodyText">Energy combines Recovery, Sleep, Strain, and physiological Stress. Recalculates after sync.</p>}</Section>):<Empty>Scores need more source data.</Empty>}</main></>}

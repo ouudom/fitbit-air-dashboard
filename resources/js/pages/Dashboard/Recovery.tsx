@@ -1,0 +1,4 @@
+import { Head } from '@inertiajs/react';
+import { Contributions, Empty, PageHeader, ScoreCard, Section } from '../../components/ui';
+import type { DailyScore } from '../../types';
+export default function Recovery({ score }: { score: DailyScore | null }) { return <><Head title="Recovery"/><main><PageHeader eyebrow="Readiness" title="Recovery" subtitle="Overnight signals compared with your own baseline."/>{score?<><div className="singleScore"><ScoreCard score={score}/></div><Section title="What moved your score" description="Direction only; wellness estimate, not diagnosis."><Contributions score={score}/></Section></>:<Empty>Recovery score needs more source data.</Empty>}<Section title="Interpretation"><p className="bodyText">High confidence requires complete signals and at least 28 baseline days. Missing values reduce confidence. Contact a qualified clinician for health concerns.</p></Section></main></>; }

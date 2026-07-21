@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: fitbit_air
       POSTGRES_USER: fitbit
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - fitbit_air_db:/var/lib/postgresql/data
     healthcheck:
@@ -13,24 +13,64 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
   app:
     build: .
     restart: unless-stopped
     env_file: .env
     environment:
-      DATABASE_URL: postgres://fitbit:${POSTGRES_PASSWORD}@db:5432/fitbit_air
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?Run php artisan key:generate before deployment}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      DB_CONNECTION: pgsql
+      DATABASE_URL: postgres://fitbit:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/fitbit_air
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+      RUN_MIGRATIONS: "true"
     depends_on:
       db:
         condition: service_healthy
     ports:
-      - "127.0.0.1:3000:3000"
-  scheduler:
-    image: curlimages/curl:8.13.0
+      - "127.0.0.1:3000:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/up"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build: .
     restart: unless-stopped
+    command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--timeout=900"]
+    env_file: .env
     environment:
-      CRON_SECRET: ${CRON_SECRET}
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?Run php artisan key:generate before deployment}
+      DB_CONNECTION: pgsql
+      DATABASE_URL: postgres://fitbit:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/fitbit_air
+      QUEUE_CONNECTION: database
     depends_on:
-      - app
-    command: ["sh","-c","while true; do sleep 3600; curl -fsS -X POST -H 'Authorization: Bearer '$$CRON_SECRET http://app:3000/api/cron/sync || true; done"]
+      app:
+        condition: service_healthy
+
+  scheduler:
+    build: .
+    restart: unless-stopped
+    command: ["php", "artisan", "schedule:work"]
+    env_file: .env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?Run php artisan key:generate before deployment}
+      DB_CONNECTION: pgsql
+      DATABASE_URL: postgres://fitbit:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/fitbit_air
+      QUEUE_CONNECTION: database
+    depends_on:
+      app:
+        condition: service_healthy
+
 volumes:
   fitbit_air_db:

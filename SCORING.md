@@ -23,3 +23,16 @@ Scores are experimental wellness estimates. Not medical devices, diagnoses, or t
 ## Evidence rules
 
 Journal correlation stays unavailable until a habit has at least five exposed and five unexposed days. UI must display sample counts and “correlation is not causation.” Formula changes require new model version and snapshot tests.
+
+## Implementation contract
+
+- `App\Domain\Analytics\ScoringService` owns deterministic formulas. Controllers and React must not recalculate scores.
+- `AnalyticsRepository` supplies normalized observations and hides storage details.
+- Persisted score rows include `date`, `score_type`, `model_version`, `value`, `confidence`, `state`, `inputs`, `explanation`, and millisecond `updated_at`.
+- Sync may safely recompute a date. Composite key `(date, score_type, model_version)` prevents duplicates.
+- Historical output changes require a new model version. Never overwrite meaning of `wellness-v1.0.0`.
+- Tests must cover complete input, missing input, calibration threshold, outliers, clamping, and deterministic repeat calculation.
+
+## Cutover verification
+
+Before traffic switch, run identical frozen input fixtures through old and new implementations. Compare score value, confidence, state, input keys, and contribution direction. Differences need explicit approval and model-version change. Never infer absent health data as zero.

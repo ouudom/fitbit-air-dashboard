@@ -1,0 +1,15 @@
+export type Metric = { date: string; value: number | null };
+export type Exercise = { id: string; startTime: string | null; displayName: string | null; type: string | null; durationS: number | null; calories: number | null; distanceMm: number | null; avgHr: number | null };
+export type SleepSession = { id: string; date: string | null; startTime: string | null; endTime: string | null; minutesAsleep: number | null; minutesAwake: number | null; minutesInSleepPeriod: number | null; minutesToFallAsleep: number | null; minutesAfterWakeUp: number | null; stages: { awake: number; light: number; deep: number; rem: number } };
+export type VitalPoint = { id: string; date: string | null; time: string | null; value: number | null; unit: string; source: string };
+export type ScoreContribution = { key: string; label: string; value: number | null; baseline: number | null; impact: number; unit: string; status: 'positive' | 'neutral' | 'negative' | 'missing' };
+export type DailyScore = { date: string; type: 'recovery' | 'sleep' | 'strain' | 'stress' | 'energy'; value: number | null; confidence: 'low' | 'medium' | 'high'; state: 'ready' | 'calibrating' | 'insufficient'; modelVersion: string; contributions: ScoreContribution[]; summary: string };
+export type DataQuality = { date: string; dataType: string; status: 'good' | 'partial' | 'missing'; coverage: number; reason: string | null };
+export type TimelineEvent = { id: string; date: string; type: string; title: string; startTime: string | null; endTime: string | null; source: string; detail: string | null };
+export type TrendSeries = { metric: string; range: number; points: Metric[] };
+export type FoodLog = { id: string; date: string; meal: string; name: string; calories: number | null; proteinG: number | null; carbsG: number | null; fatG: number | null; notes: string | null };
+export type JournalEntry = { id: string; date: string; habit: string; value: string; notes: string | null };
+export type HabitInsight = { habit: string; yes: number; no: number; ready: boolean; note: string };
+export type StrengthSession = { id: string; date: string; title: string; sets: { id: string; exercise: string; reps: number | null; loadKg: number | null; rpe: number | null }[] };
+export type CoachMessage = { id: string; role: 'user' | 'assistant'; content: string; citations: { label: string; date: string; value: string | number | null }[] };
+export type PageProps<T extends object = object> = T & { auth?: { user?: { name?: string; email?: string } }; flash?: { success?: string; error?: string }; errors?: Record<string, string> };
