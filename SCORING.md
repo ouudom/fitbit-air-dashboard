@@ -1,4 +1,4 @@
-# Fitbit Air wellness scoring specification
+# LifeStats wellness scoring specification
 
 Model: `wellness-v1.0.0`
 

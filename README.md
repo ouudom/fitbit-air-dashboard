@@ -1,4 +1,4 @@
-# Fitbit Air Health Coach
+# LifeStats
 
 Private, Bevel-inspired web health coach using Fitbit data from Google Health API. Includes explained Recovery, Sleep, Strain, physiological Stress, Energy, Timeline, Trends, Journal, Strength, Nutrition, Health Monitor, and evidence-grounded AI coach.
 
