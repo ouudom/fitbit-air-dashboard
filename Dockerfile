@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY resources ./resources
+COPY Modules ./Modules
 COPY vite.config.js tsconfig.json ./
 COPY public ./public
 RUN npm run build
@@ -10,6 +11,7 @@ RUN npm run build
 FROM composer:2 AS vendor
 WORKDIR /app
 COPY composer.json composer.lock ./
+COPY Modules ./Modules
 RUN composer install --no-dev --prefer-dist --no-interaction --no-progress --no-scripts
 
 FROM dunglas/frankenphp:1-php8.5-alpine

@@ -11,6 +11,7 @@ use App\Domain\Coach\Contracts\ResponsesProvider;
 use App\Domain\Coach\HttpResponsesProvider;
 use App\Domain\Coach\Repositories\DatabaseCoachRepository;
 use App\Domain\Coach\ResponsesStreamParser;
+use App\Domain\Health\Contracts\NutritionLogWriter;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\ServiceProvider;
 
@@ -43,6 +44,17 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        if ($this->app->bound(NutritionLogWriter::class)) {
+            return;
+        }
+
+        $command = $_SERVER['argv'][1] ?? '';
+        if ($this->app->runningInConsole() && str_starts_with($command, 'module:')) {
+            return;
+        }
+
+        throw new \LogicException(
+            'Required health integration is disabled. Enable GoogleHealth in modules_statuses.json.',
+        );
     }
 }

@@ -1,6 +1,6 @@
 # LifeStats
 
-Personal health dashboard. Laravel serves Inertia pages and owns persistence, OAuth, sync, scoring, and write operations. React renders dashboard UI. PostgreSQL schema remains compatible with the earlier deployment.
+Personal health dashboard. Laravel serves Inertia pages and owns shared persistence and scoring. Feature modules own external integrations. React renders dashboard UI. PostgreSQL schema remains compatible with the earlier deployment.
 
 ## Stack
 
@@ -11,6 +11,7 @@ Personal health dashboard. Laravel serves Inertia pages and owns persistence, OA
 - Vite 8
 - PostgreSQL 17
 - FrankenPHP production runtime
+- nwidart/laravel-modules 13
 
 ## Modular structure
 
@@ -19,20 +20,33 @@ app/
 ├── Domain/
 │   ├── Analytics/   # queries, wellness scoring, journal insights
 │   ├── Coach/       # provider boundary, context, response streaming
-│   └── Health/      # Google API, OAuth, crypto, sync, write operations
+│   └── Health/      # provider-neutral integration contracts
 ├── Http/
-│   ├── Controllers/ # thin Inertia and mutation endpoints
-│   └── Middleware/  # Inertia props and health-session gate
-├── Jobs/            # queued health synchronization
-└── Models/          # legacy-schema Eloquent mappings
+│   ├── Controllers/ # shared Inertia and mutation endpoints
+│   └── Middleware/  # shared Inertia props
+└── Models/          # users and normalized application data
+Modules/
+└── GoogleHealth/
+    ├── app/          # API, OAuth, sync, jobs, models, HTTP, providers
+    ├── config/       # google-health.* configuration
+    ├── database/     # future module migrations, factories, seeders
+    ├── resources/js/ # module-owned Inertia pages
+    ├── routes/       # module-owned web/API routes
+    ├── tests/        # module feature and unit tests
+    ├── composer.json
+    └── module.json
 resources/js/
 ├── components/      # reusable UI and chart primitives
 ├── layouts/         # application shell
-├── pages/           # route-level Inertia pages
+├── pages/           # shared route-level Inertia pages
 └── types/           # shared TypeScript contracts
 ```
 
-Domain code must not depend on React or controllers. Controllers validate input and delegate work. External services sit behind domain clients/contracts. Legacy models keep millisecond timestamps, string IDs, and existing column names.
+Module folders and PHP namespaces use StudlyCase (`GoogleHealth`). Aliases, configuration keys, routes, and asset slugs use kebab-case (`google-health`). Core code depends only on contracts under `app/Domain`; module providers bind those contracts to integration implementations. `User`, normalized health records, metrics, scores, and shared UI stay in the main application.
+
+`GoogleHealth` is a required integration module for the current authentication and nutrition workflows. Keep `modules_statuses.json` deployed with `"GoogleHealth": true`. Application boot fails clearly when its required contract is unavailable; `module:*` commands remain available for recovery.
+
+Historical schema remains in the root migration for upgrade safety. Future Google-specific schema changes belong in `Modules/GoogleHealth/database/migrations`.
 
 ## Local setup
 
@@ -55,6 +69,7 @@ Useful checks:
 php artisan test
 ./vendor/bin/pint --test
 npm run build
+php artisan module:list
 ```
 
 ## Docker

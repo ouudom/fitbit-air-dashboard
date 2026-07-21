@@ -1,0 +1,28 @@
+{
+    "name": "vuthyouthdom/google-health",
+    "description": "Google Health integration module for LifeStats.",
+    "license": "MIT",
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {
+
+            }
+        }
+    },
+    "autoload": {
+        "files": [
+            "app/Support/legacy_aliases.php"
+        ],
+        "psr-4": {
+            "Modules\\GoogleHealth\\": "app/",
+            "Modules\\GoogleHealth\\Database\\Factories\\": "database/factories/",
+            "Modules\\GoogleHealth\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\GoogleHealth\\Tests\\": "tests/"
+        }
+    }
+}

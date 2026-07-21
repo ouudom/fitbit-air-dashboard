@@ -1,0 +1,11 @@
+{
+    "name": "GoogleHealth",
+    "alias": "google-health",
+    "description": "Google Health OAuth, API, synchronization, and write integration.",
+    "keywords": ["google-health", "oauth", "health"],
+    "priority": 0,
+    "providers": [
+        "Modules\\GoogleHealth\\Providers\\GoogleHealthServiceProvider"
+    ],
+    "files": []
+}

@@ -18,5 +18,5 @@
         "baseUrl": ".",
         "paths": {"@/*": ["resources/js/*"]}
     },
-    "include": ["resources/js/**/*.ts", "resources/js/**/*.tsx", "vite.config.js"]
+    "include": ["resources/js/**/*.ts", "resources/js/**/*.tsx", "Modules/*/resources/js/**/*.ts", "Modules/*/resources/js/**/*.tsx", "vite.config.js"]
 }

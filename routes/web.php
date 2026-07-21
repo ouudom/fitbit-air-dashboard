@@ -2,26 +2,17 @@
 
 declare(strict_types=1);
 
-use App\Http\Controllers\Auth\GoogleHealthAuthController;
 use App\Http\Controllers\Dashboard\ActivityController;
 use App\Http\Controllers\Dashboard\CoachController;
 use App\Http\Controllers\Dashboard\DashboardController;
 use App\Http\Controllers\Dashboard\FoodController;
 use App\Http\Controllers\Dashboard\JournalController;
 use App\Http\Controllers\Dashboard\StrengthController;
-use App\Http\Controllers\Dashboard\SyncController;
 use App\Http\Controllers\Dashboard\TrendsController;
 use App\Http\Controllers\Dashboard\WellnessController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
-Route::get('/login', [GoogleHealthAuthController::class, 'show'])->name('login');
-Route::get('/api/auth/login', [GoogleHealthAuthController::class, 'redirect'])->name('auth.google.redirect');
-Route::get('/auth/fitbit/redirect', [GoogleHealthAuthController::class, 'redirect']);
-Route::get('/api/auth/callback', [GoogleHealthAuthController::class, 'callback'])->name('auth.google.callback');
-Route::post('/api/auth/logout', [GoogleHealthAuthController::class, 'logout'])->name('logout');
-Route::post('/logout', [GoogleHealthAuthController::class, 'logout']);
-Route::post('/api/cron/sync', [SyncController::class, 'cron'])->name('cron.sync');
 
 Route::middleware('health.connected')->prefix('dashboard')->group(function (): void {
     Route::get('/', DashboardController::class)->name('dashboard');
@@ -33,7 +24,6 @@ Route::middleware('health.connected')->prefix('dashboard')->group(function (): v
     Route::get('/trends', TrendsController::class)->name('dashboard.trends');
     Route::get('/data', [ActivityController::class, 'data'])->name('dashboard.data');
     Route::get('/data/{type}', [ActivityController::class, 'dataType'])->name('dashboard.data.type');
-    Route::post('/sync', [SyncController::class, 'store'])->name('dashboard.sync');
     Route::get('/coach', [CoachController::class, 'index'])->name('dashboard.coach');
     Route::post('/coach', [CoachController::class, 'store'])->name('dashboard.coach.store');
 
