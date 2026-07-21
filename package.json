@@ -1,5 +1,6 @@
 {
     "$schema": "https://www.schemastore.org/package.json",
+    "name": "lifestats",
     "private": true,
     "type": "module",
     "scripts": {

@@ -1,7 +1,5 @@
 node_modules
-.vendor
 vendor
-.next
 .git
 .env
 npm-debug.log

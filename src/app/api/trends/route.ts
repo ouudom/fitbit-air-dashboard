@@ -1,3 +1,0 @@
-import {NextRequest,NextResponse} from 'next/server';import {computeScoreRange} from '../../../lib/scoring';import {getDaily,getScores} from '../../../lib/db';
-const scoreTypes=new Set(['recovery','sleep','strain','stress','energy']);
-export async function GET(req:NextRequest){const metric=req.nextUrl.searchParams.get('metric')??'recovery',range=Math.min(90,Math.max(7,Number(req.nextUrl.searchParams.get('range')??30)));if(scoreTypes.has(metric)){await computeScoreRange(range);const rows=await getScores(metric,range);return NextResponse.json({metric,range,points:rows.reverse().map(x=>({date:x.date,value:x.value,confidence:x.confidence}))})}const rows=await getDaily(metric,range);return NextResponse.json({metric,range,points:rows})}

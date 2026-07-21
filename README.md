@@ -1,6 +1,6 @@
 # LifeStats
 
-Personal health dashboard. Laravel serves Inertia pages and owns persistence, OAuth, sync, scoring, and write operations. React renders dashboard UI. PostgreSQL schema remains compatible with earlier Next.js/Drizzle deployment.
+Personal health dashboard. Laravel serves Inertia pages and owns persistence, OAuth, sync, scoring, and write operations. React renders dashboard UI. PostgreSQL schema remains compatible with the earlier deployment.
 
 ## Stack
 

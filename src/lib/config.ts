@@ -1,4 +1,0 @@
-import 'server-only';
-const llmBaseUrl=(process.env.LLM_BASE_URL??'https://api.openai.com/v1').replace(/\/+$/,'');
-export const config={clientId:process.env.GOOGLE_CLIENT_ID??'',clientSecret:process.env.GOOGLE_CLIENT_SECRET??'',redirectUri:process.env.REDIRECT_URI??'http://localhost:3000/api/auth/callback',scopes:(process.env.SCOPES??'https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly').trim(),syncDays:Number(process.env.SYNC_DAYS??30),sessionSecret:process.env.SESSION_SECRET??process.env.GOOGLE_CLIENT_SECRET??'development-only-change-me',encryptionKey:process.env.TOKEN_ENCRYPTION_KEY??'',cronSecret:process.env.CRON_SECRET??'',llmApiKey:process.env.LLM_API_KEY??process.env.OPENAI_API_KEY??'',llmModel:process.env.LLM_MODEL??process.env.OPENAI_MODEL??'gpt-5.4-mini',llmBaseUrl};
-export const endpoints={auth:'https://accounts.google.com/o/oauth2/v2/auth',token:'https://oauth2.googleapis.com/token',health:'https://health.googleapis.com/v4'};
