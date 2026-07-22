@@ -26,14 +26,14 @@ Do not add Google Health Premium, Coach, social, badges, community, or speculati
 
 ## Architecture
 
-- Keep provider-specific code inside `Modules/GoogleHealth`.
-- Keep shared contracts and `User` under `app`.
-- Core code may depend on contracts. Core code must not import `Modules\\GoogleHealth` implementations.
-- Module folders, namespaces, and classes use StudlyCase: `GoogleHealth`.
-- Module aliases, config keys, and asset slugs use kebab-case: `google-health`.
-- Module-owned Inertia pages live under `Modules/<Module>/resources/js/Pages`.
-- Shared React components, layouts, and types remain under `resources/js`.
-- Prefer semantic ports such as `NutritionLogWriter`; never expose Google wire payloads through core contracts.
+- Backend bounded contexts live under `apps/api/src/lifestats/<context>`.
+- Each context owns `domain`, `application`, `infrastructure`, and `presentation` layers.
+- Dependencies point `presentation → application → domain`.
+- Domain code must not import FastAPI, SQLAlchemy, HTTPX, Celery, provider payloads, or another context's infrastructure.
+- Cross-context behavior uses semantic application ports or domain events.
+- Provider-specific code stays inside `google_health`.
+- Next.js route composition lives under `apps/web/src/app`; feature UI stays under `apps/web/src/modules`.
+- Frontend contracts come from the FastAPI OpenAPI schema.
 
 ## Frontend design
 
@@ -43,22 +43,24 @@ Do not add Google Health Premium, Coach, social, badges, community, or speculati
 
 ## Data safety
 
-- Never run `migrate:fresh` against an existing LifeStats database.
+- Never reset or drop an existing LifeStats database.
 - Never delete or rewrite historical migrations during feature cleanup.
-- Use additive migrations.
-- Preserve legacy token encryption and queued-job compatibility until their rollback windows explicitly end.
+- Use additive Alembic migrations.
+- Preserve legacy token decryption and historical tables until rollback windows explicitly end.
 
 ## Quality gate
 
 Run before handoff:
 
 ```bash
-composer validate --strict
-./vendor/bin/pint --test
-composer test
+.venv/bin/ruff check .
+.venv/bin/ruff format --check .
+.venv/bin/mypy
+.venv/bin/pytest
+npm run lint
+npm run typecheck
 npm run build
-npx tsc --noEmit
-php artisan optimize
+npm run openapi:check
 ```
 
-Production changes must also pass the Docker build and an in-image `php artisan optimize` check.
+Production changes must also pass empty/legacy PostgreSQL migration tests and the Docker build.

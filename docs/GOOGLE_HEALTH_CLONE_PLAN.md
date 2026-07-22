@@ -138,7 +138,7 @@ Cycle health, mindfulness, basal measurements, and blood pressure are deferred. 
 
 ## Phase 6: synchronization correctness
 
-- Replace full polling with incremental cursors where supported.
+- Use reconciled-stream pagination and bounded replacement windows; Google Health does not expose a persistent change cursor for these reads.
 - Add webhook ingestion for supported data types.
 - Reconcile deletions and edits from Google Health.
 - Make sync idempotent.
@@ -155,5 +155,4 @@ Cycle health, mindfulness, basal measurements, and blood pressure are deferred. 
 - Unsupported official metrics are labeled unavailable.
 - All health views show freshness/error state.
 - Historical migrations remain nondestructive.
-- PHPUnit, Pint, TypeScript, Vite, Laravel optimize, and Docker checks pass.
-
+- Ruff, formatting, mypy, pytest, ESLint, TypeScript, Next.js build, migration compatibility, and Docker checks pass.

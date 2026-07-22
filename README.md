@@ -88,6 +88,6 @@ Existing database contains irreplaceable health history.
 6. Verify bound Google identity, projection counts, controlled sync, timeline, habits, and scores.
 7. Start Docker replacement. Keep old image and backup through rollback window.
 
-Historical Laravel migrations remain unchanged in `database/migrations`. Legacy PHP sources remain for rollback during cutover, but no deployed container executes them.
+Historical Laravel migrations remain unchanged in `database/migrations` as immutable safety records. Laravel runtime source has been removed; rollback uses the preserved prior image and database backup.
 
 Future contexts—Fitness, meditation, food, biology, Alfred, Telegram, and Todoist—remain documentation-only until requested.
