@@ -11,7 +11,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.mark.asyncio
 async def test_setup_session_and_empty_dashboard() -> None:
-    from lifestats.main import app
+    from src.main import app
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"

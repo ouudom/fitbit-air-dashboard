@@ -26,12 +26,12 @@ Do not add Google Health Premium, Coach, social, badges, community, or speculati
 
 ## Architecture
 
-- Backend bounded contexts live under `apps/api/src/lifestats/<context>`.
-- Each context owns `domain`, `application`, `infrastructure`, and `presentation` layers.
-- Dependencies point `presentation → application → domain`.
-- Domain code must not import FastAPI, SQLAlchemy, HTTPX, Celery, provider payloads, or another context's infrastructure.
-- Cross-context behavior uses semantic application ports or domain events.
-- Provider-specific code stays inside `google_health`.
+- Shared backend concerns live under `apps/api/src/core`.
+- Backend bounded contexts live under `apps/api/src/modules/<context>`.
+- Each module keeps HTTP mechanics in `router.py` and optional `dependencies.py`, validation in `schemas.py`, orchestration in `service.py`, and ORM mappings in `models.py`.
+- Optional `domain.py` files remain framework-independent.
+- Cross-context behavior imports public services or semantic domain contracts.
+- Provider-specific clients, OAuth, synchronization, encryption, writes, and tasks stay inside `modules/google_health`.
 - Next.js route composition lives under `apps/web/src/app`; feature UI stays under `apps/web/src/modules`.
 - Frontend contracts come from the FastAPI OpenAPI schema.
 
@@ -53,10 +53,10 @@ Do not add Google Health Premium, Coach, social, badges, community, or speculati
 Run before handoff:
 
 ```bash
-.venv/bin/ruff check .
-.venv/bin/ruff format --check .
-.venv/bin/mypy
-.venv/bin/pytest
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy
+uv run pytest
 npm run lint
 npm run typecheck
 npm run build

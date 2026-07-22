@@ -1,10 +1,17 @@
 # LifeStats modular architecture
 
-## Dependency rule
+## Backend layout
 
-`presentation → application → domain`. Infrastructure implements domain/application ports. Domain never imports FastAPI, SQLAlchemy, HTTPX, Celery, Next.js, or provider payload types.
+`apps/api/src` contains global app wiring, `core`, and domain `modules`.
 
-One bounded context must not import another context’s infrastructure. Cross-context orchestration belongs in an application service and depends on a semantic port. The dashboard is a read-model composer; it does not own source records.
+- `router.py`: FastAPI transport only.
+- `dependencies.py`: optional module-owned FastAPI dependencies.
+- `schemas.py`: Pydantic request and response contracts.
+- `service.py`: module orchestration and business rules.
+- `models.py`: module-owned SQLAlchemy mappings.
+- `domain.py`: optional pure domain types and calculations.
+
+Complex integrations may add focused adapter files. Google Health owns its OAuth, client, synchronization, encryption, remote writes, and Celery tasks. Cross-module composition imports public services or domain contracts. The dashboard remains a read-model composer; it owns no source records.
 
 ## Data ownership
 

@@ -5,4 +5,4 @@ WORKDIR /app
 COPY pyproject.toml alembic.ini ./
 COPY apps/api ./apps/api
 RUN pip install --no-cache-dir .
-CMD ["uvicorn", "lifestats.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

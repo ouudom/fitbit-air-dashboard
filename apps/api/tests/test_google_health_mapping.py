@@ -1,4 +1,4 @@
-from lifestats.google_health.application.sync import _number, _point_date
+from src.modules.google_health.sync import _number, _point_date
 
 
 def test_rollup_ignores_civil_date_numbers() -> None:

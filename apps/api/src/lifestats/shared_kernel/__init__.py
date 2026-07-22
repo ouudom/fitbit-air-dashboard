@@ -1,1 +1,0 @@
-"""Framework-independent shared primitives."""

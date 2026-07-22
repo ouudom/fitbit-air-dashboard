@@ -1,1 +1,0 @@
-"""Pure score model."""

@@ -3,7 +3,7 @@ import hashlib
 import os
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from lifestats.google_health.infrastructure.crypto import TokenCipher
+from src.modules.google_health.crypto import TokenCipher
 
 
 def test_v2_round_trip() -> None:

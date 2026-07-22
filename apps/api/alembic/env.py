@@ -2,15 +2,15 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-
-# Register module-owned metadata.
-from lifestats.google_health.infrastructure import models as google_models  # noqa: F401
-from lifestats.habits.infrastructure import models as habit_models  # noqa: F401
-from lifestats.identity.infrastructure import models as identity_models  # noqa: F401
-from lifestats.shared_kernel.infrastructure.config import get_settings
-from lifestats.shared_kernel.infrastructure.database import Base
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
+# Register module-owned metadata.
+from src.core.config import get_settings
+from src.core.database import Base
+from src.modules.google_health import models as google_models  # noqa: F401
+from src.modules.habits import models as habit_models  # noqa: F401
+from src.modules.identity import models as identity_models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)

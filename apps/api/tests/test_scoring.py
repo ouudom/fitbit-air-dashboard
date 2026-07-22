@@ -1,4 +1,4 @@
-from lifestats.scoring.domain.model import MIN_BASELINE_DAYS, Signal, component, weighted_score
+from src.modules.scoring.domain import MIN_BASELINE_DAYS, Signal, component, weighted_score
 
 
 def test_component_requires_personal_baseline() -> None:

@@ -14,21 +14,26 @@ Private, single-user Google Health companion. FastAPI owns domain behavior and i
 
 ```text
 apps/
-├── api/src/lifestats/
-│   ├── identity/
-│   ├── google_health/
-│   ├── dashboard/
-│   ├── scoring/
-│   ├── timeline/
-│   ├── habits/
-│   └── shared_kernel/
+├── api/
+│   ├── alembic/
+│   └── src/
+│       ├── __init__.py
+│       ├── main.py
+│       ├── core/
+│       └── modules/
+│           ├── identity/
+│           ├── google_health/
+│           ├── dashboard/
+│           ├── habits/
+│           ├── scoring/
+│           └── timeline/
 └── web/src/
     ├── app/
     ├── lib/
     └── modules/
 ```
 
-Backend contexts own `domain`, `application`, `infrastructure`, and `presentation`. Domain code is framework-independent. Cross-context behavior uses application contracts. Architecture tests reject imports of another context’s infrastructure.
+Backend modules are self-contained. Routers own HTTP mechanics, schemas own request/response validation, services own orchestration and business rules, and models own ORM mappings. Pure domain rules remain framework-independent. Google-specific transport stays inside its module.
 
 ## Source of truth
 
@@ -44,20 +49,18 @@ Requirements: Python 3.12+, Node.js 24, npm, PostgreSQL 17, Redis.
 
 ```bash
 cp .env.example .env
-python -m venv .venv
-. .venv/bin/activate
-pip install -e '.[dev]'
+uv sync --extra dev
 npm install
-alembic upgrade head
-uvicorn lifestats.main:app --app-dir apps/api/src --reload
+uv run alembic upgrade head
+uv run app
 npm run dev
 ```
 
 Run worker and scheduler separately:
 
 ```bash
-celery -A lifestats.google_health.infrastructure.celery_app:celery_app worker --loglevel=INFO
-celery -A lifestats.google_health.infrastructure.celery_app:celery_app beat --loglevel=INFO
+uv run celery -A src.modules.google_health.tasks:celery_app worker --loglevel=INFO
+uv run celery -A src.modules.google_health.tasks:celery_app beat --loglevel=INFO
 ```
 
 Open `http://localhost:3000`. First setup requires `SETUP_TOKEN`. After account creation, setup permanently returns 404.
@@ -65,10 +68,10 @@ Open `http://localhost:3000`. First setup requires `SETUP_TOKEN`. After account 
 ## Verification
 
 ```bash
-ruff check .
-ruff format --check .
-mypy
-pytest
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy
+uv run pytest
 npm run lint
 npm run typecheck
 npm run build
