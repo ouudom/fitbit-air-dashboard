@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 export type DashboardView = "overview" | "sleep";
@@ -8,13 +9,18 @@ type DashboardShellProps = {
   email: string;
   logoutPending: boolean;
   onLogout: () => void;
-  onNavigate: (view: DashboardView) => void;
   syncLabel: string;
 };
 
-const navigation: Array<{ id: DashboardView; label: string; shortLabel: string; icon: string }> = [
-  { id: "overview", label: "Batcave Overview", shortLabel: "Overview", icon: "⌂" },
-  { id: "sleep", label: "Stasis Architecture", shortLabel: "Stasis", icon: "☾" },
+const navigation: Array<{
+  id: DashboardView;
+  href: string;
+  label: string;
+  shortLabel: string;
+  icon: string;
+}> = [
+  { id: "overview", href: "/dashboard", label: "Dashboard", shortLabel: "Dashboard", icon: "⌂" },
+  { id: "sleep", href: "/sleep", label: "Sleep", shortLabel: "Sleep", icon: "☾" },
 ];
 
 export function DashboardShell({
@@ -23,7 +29,6 @@ export function DashboardShell({
   email,
   logoutPending,
   onLogout,
-  onNavigate,
   syncLabel,
 }: DashboardShellProps) {
   return (
@@ -50,15 +55,15 @@ export function DashboardShell({
         <nav className="railNavigation" aria-label="Primary">
           <p>Health views</p>
           {navigation.map((item) => (
-            <button
+            <Link
               aria-current={activeView === item.id ? "page" : undefined}
               className={activeView === item.id ? "active" : undefined}
+              href={item.href}
               key={item.id}
-              onClick={() => onNavigate(item.id)}
             >
               <span aria-hidden="true">{item.icon}</span>
               {item.label}
-            </button>
+            </Link>
           ))}
         </nav>
 
@@ -88,15 +93,15 @@ export function DashboardShell({
 
       <nav className="mobileNavigation" aria-label="Primary">
         {navigation.map((item) => (
-          <button
+          <Link
             aria-current={activeView === item.id ? "page" : undefined}
             className={activeView === item.id ? "active" : undefined}
+            href={item.href}
             key={item.id}
-            onClick={() => onNavigate(item.id)}
           >
             <span aria-hidden="true">{item.icon}</span>
             {item.shortLabel}
-          </button>
+          </Link>
         ))}
       </nav>
     </div>

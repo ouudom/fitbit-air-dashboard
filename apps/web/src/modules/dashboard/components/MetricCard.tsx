@@ -1,8 +1,9 @@
+import Link from "next/link";
 import type { Dashboard } from "@/lib/types";
 
 type Metric = Dashboard["metrics"][number];
 
-export function MetricCard({ metric, onOpen }: { metric: Metric; onOpen?: () => void }) {
+export function MetricCard({ metric, href }: { metric: Metric; href?: string }) {
   const content = (
     <>
       <div className="metricCardHeader">
@@ -21,11 +22,11 @@ export function MetricCard({ metric, onOpen }: { metric: Metric; onOpen?: () => 
     </>
   );
 
-  if (onOpen) {
+  if (href) {
     return (
-      <button className="metricCard metricCardButton" onClick={onOpen}>
+      <Link className="metricCard metricCardButton" href={href}>
         {content}
-      </button>
+      </Link>
     );
   }
   return <article className="metricCard">{content}</article>;

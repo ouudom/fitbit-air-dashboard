@@ -10,9 +10,8 @@ import { StasisArchitecture } from "./views/StasisArchitecture";
 
 const today = () => new Date().toLocaleDateString("en-CA");
 
-export function TodayDashboard({ email }: { email: string }) {
+export function TodayDashboard({ email, view }: { email: string; view: DashboardView }) {
   const client = useQueryClient();
-  const [activeView, setActiveView] = useState<DashboardView>("overview");
   const [date, setDate] = useState(today);
   const dashboard = useQuery({
     queryKey: ["dashboard", date],
@@ -48,11 +47,10 @@ export function TodayDashboard({ email }: { email: string }) {
 
   return (
     <DashboardShell
-      activeView={activeView}
+      activeView={view}
       email={email}
       logoutPending={logout.isPending}
       onLogout={() => logout.mutate()}
-      onNavigate={setActiveView}
       syncLabel={syncLabel}
     >
       {dashboard.isPending && (
@@ -73,19 +71,18 @@ export function TodayDashboard({ email }: { email: string }) {
         </section>
       )}
 
-      {data && activeView === "overview" && (
+      {data && view === "overview" && (
         <BatcaveOverview
           data={data}
           date={date}
           onDateChange={setDate}
-          onOpenSleep={() => setActiveView("sleep")}
           onSync={() => sync.mutate()}
           syncError={sync.error?.message}
           syncing={sync.isPending}
         />
       )}
 
-      {data && activeView === "sleep" && (
+      {data && view === "sleep" && (
         <StasisArchitecture data={data} date={date} onDateChange={setDate} />
       )}
     </DashboardShell>

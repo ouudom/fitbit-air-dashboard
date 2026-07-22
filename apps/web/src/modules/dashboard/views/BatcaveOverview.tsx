@@ -5,7 +5,6 @@ type BatcaveOverviewProps = {
   data: Dashboard;
   date: string;
   onDateChange: (date: string) => void;
-  onOpenSleep: () => void;
   onSync: () => void;
   syncError?: string;
   syncing: boolean;
@@ -15,7 +14,6 @@ export function BatcaveOverview({
   data,
   date,
   onDateChange,
-  onOpenSleep,
   onSync,
   syncError,
   syncing,
@@ -66,9 +64,9 @@ export function BatcaveOverview({
         <div className="metricGrid">
           {data.metrics.map((metric) => (
             <MetricCard
+              href={metric.key === "sleep" ? "/sleep" : undefined}
               key={metric.key}
               metric={metric}
-              onOpen={metric.key === "sleep" ? onOpenSleep : undefined}
             />
           ))}
         </div>

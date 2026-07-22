@@ -165,7 +165,7 @@ button {
   text-transform: uppercase;
 }
 
-.railNavigation button {
+.railNavigation a {
   display: flex;
   width: 100%;
   min-height: 46px;
@@ -184,7 +184,7 @@ button {
   transition: 120ms ease;
 }
 
-.railNavigation button span {
+.railNavigation a span {
   display: grid;
   width: 24px;
   height: 24px;
@@ -193,19 +193,19 @@ button {
   font: 17px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.railNavigation button:hover {
+.railNavigation a:hover {
   background: var(--surface-raised);
   color: var(--text);
 }
 
-.railNavigation button.active {
+.railNavigation a.active {
   border-color: rgb(228 189 79 / 32%);
   background: #22252b;
   color: var(--accent-strong);
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.railNavigation button.active span {
+.railNavigation a.active span {
   color: var(--accent-strong);
 }
 
@@ -1030,7 +1030,7 @@ button {
     backdrop-filter: blur(14px);
   }
 
-  .mobileNavigation button {
+  .mobileNavigation a {
     display: grid;
     min-height: 50px;
     place-items: center;
@@ -1045,11 +1045,11 @@ button {
     font-weight: 750;
   }
 
-  .mobileNavigation button span {
+  .mobileNavigation a span {
     font-size: 18px;
   }
 
-  .mobileNavigation button.active {
+  .mobileNavigation a.active {
     background: var(--surface-raised);
     color: var(--accent-strong);
   }
