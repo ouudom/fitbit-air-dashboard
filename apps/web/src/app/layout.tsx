@@ -4,8 +4,8 @@ import { Providers } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LifeStats",
-  description: "Private Google Health companion",
+  title: "LifeStats — Batcave Overview",
+  description: "Private Google Health overview and sleep dashboard",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
