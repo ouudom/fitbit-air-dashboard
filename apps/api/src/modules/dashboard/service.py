@@ -6,7 +6,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import Settings
-from src.modules.habits.service import HabitService
 from src.modules.scoring.domain import MODEL_VERSION
 from src.modules.timeline.service import TimelineService
 
@@ -17,32 +16,11 @@ class DashboardService:
         self.settings = settings
 
     async def get(self, user_id: int, day: date) -> dict[str, object]:
-        habit_service = HabitService(self.db)
-        await habit_service.import_legacy(user_id)
-        habits = await habit_service.scheduled(user_id, day)
-        entries = await habit_service.entries_for_day(user_id, day, self.settings.timezone)
-        by_habit: dict[str, float] = {}
-        for entry in entries:
-            key = str(entry.habit_id)
-            by_habit[key] = by_habit.get(key, 0) + entry.value
         return {
             "date": day.isoformat(),
             "timezone": self.settings.app_timezone,
             "metrics": await self._metrics(day),
             "scores": await self._scores(day),
-            "habits": [
-                {
-                    "id": str(habit.id),
-                    "title": habit.title,
-                    "kind": habit.kind,
-                    "targetType": habit.target_type,
-                    "targetValue": habit.target_value,
-                    "unit": habit.unit,
-                    "progress": by_habit.get(str(habit.id), 0),
-                    "complete": (by_habit.get(str(habit.id), 0) >= (habit.target_value or 1)),
-                }
-                for habit in habits
-            ],
             "timeline": [
                 {
                     "id": item.id,

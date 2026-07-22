@@ -24,7 +24,6 @@ apps/
 │           ├── identity/
 │           ├── google_health/
 │           ├── dashboard/
-│           ├── habits/
 │           ├── scoring/
 │           └── timeline/
 └── web/src/
@@ -40,7 +39,6 @@ Backend modules are self-contained. Routers own HTTP mechanics, schemas own requ
 - Supported health writes go to Google Health first.
 - Successful remote writes are reconciled into local projections.
 - Local projection failure never overrides remote truth.
-- Habits unsupported by Google remain local.
 - Readiness, Stress, and Energy are transparent LifeStats estimates, not Google or Bevel scores.
 
 ## Local development
@@ -88,7 +86,7 @@ Existing database contains irreplaceable health history.
 3. Preserve `TOKEN_ENCRYPTION_KEY`, `APP_KEY`, Google OAuth settings, and prior image.
 4. Run `alembic upgrade head`; migration is additive and has no destructive downgrade.
 5. Create private admin. Opening Google connection imports and re-encrypts legacy tokens without changing old rows.
-6. Verify bound Google identity, projection counts, controlled sync, timeline, habits, and scores.
+6. Verify bound Google identity, projection counts, controlled sync, timeline, and scores.
 7. Start Docker replacement. Keep old image and backup through rollback window.
 
 Historical Laravel migrations remain unchanged in `database/migrations` as immutable safety records. Laravel runtime source has been removed; rollback uses the preserved prior image and database backup.

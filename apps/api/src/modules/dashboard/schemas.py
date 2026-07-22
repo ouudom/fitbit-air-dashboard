@@ -24,17 +24,6 @@ class ScoreResponse(BaseModel):
     disclaimer: str
 
 
-class DashboardHabitResponse(BaseModel):
-    id: str
-    title: str
-    kind: str
-    targetType: str
-    targetValue: float | None
-    unit: str | None
-    progress: float
-    complete: bool
-
-
 class TimelineItemResponse(BaseModel):
     id: str
     kind: str
@@ -58,6 +47,5 @@ class DashboardResponse(BaseModel):
     timezone: str
     metrics: list[MetricResponse]
     scores: list[ScoreResponse]
-    habits: list[DashboardHabitResponse]
     timeline: list[TimelineItemResponse]
     sync: list[SyncStateResponse]

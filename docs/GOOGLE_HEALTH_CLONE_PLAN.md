@@ -41,7 +41,7 @@ Users without a connected device receive only Today and Health. LifeStats will i
 Remove current features outside the base product:
 
 - AI Coach and OpenAI response plumbing.
-- Local habit journal and correlation insights.
+- Local journals and correlation insights.
 - Local strength-session and set logger.
 - Custom recovery, strain, stress, energy, and sleep scores.
 - Standalone generic Trends and Data Explorer product navigation.

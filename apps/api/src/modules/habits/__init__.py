@@ -1,1 +1,1 @@
-"""Habit definitions, schedules, and entries module."""
+"""Historical habit table mappings retained for data safety."""

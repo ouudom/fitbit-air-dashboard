@@ -16,7 +16,6 @@ class TimelineService:
     async def for_day(self, user_id: int, day: date, timezone: ZoneInfo) -> list[TimelineItem]:
         items = await self._health(day, timezone)
         items.extend(await self._workouts(day, timezone))
-        items.extend(await self._habits(user_id, day, timezone))
         unique = {item.id: item for item in items}
         return sorted(unique.values(), key=lambda item: item.occurred_at, reverse=True)
 
@@ -73,32 +72,6 @@ class TimelineService:
                 source="Google Health",
                 detail=f"{round(row['duration_s'] / 60)} min" if row["duration_s"] else None,
                 freshness=_freshness(row["updated_at"]),
-            )
-            for row in rows
-        ]
-
-    async def _habits(self, user_id: int, day: date, timezone: ZoneInfo) -> list[TimelineItem]:
-        start = datetime.combine(day, time.min, timezone)
-        end = datetime.combine(day, time.max, timezone)
-        rows = (
-            await self.db.execute(
-                text(
-                    "SELECT e.id, e.occurred_at, e.value, e.note, e.source, h.title, h.unit "
-                    "FROM habit_entries_v1 e JOIN habits_v1 h ON h.id=e.habit_id "
-                    "WHERE e.user_id=:user_id AND e.source <> 'google-health' "
-                    "AND e.occurred_at BETWEEN :start AND :end"
-                ),
-                {"user_id": user_id, "start": start, "end": end},
-            )
-        ).mappings()
-        return [
-            TimelineItem(
-                id=f"habit:{row['id']}",
-                kind="habit",
-                title=row["title"],
-                occurred_at=row["occurred_at"],
-                source="LifeStats",
-                detail=(f"{row['value']:g} {row['unit'] or ''}".strip()),
             )
             for row in rows
         ]
