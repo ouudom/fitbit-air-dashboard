@@ -13,8 +13,6 @@ final class DashboardController extends Controller
 {
     public function __invoke(DashboardProjectionService $dashboard): Response
     {
-        $date = now()->toDateString();
-
-        return Inertia::render('Dashboard/Index', $dashboard->day($date));
+        return Inertia::render('Dashboard/Index', $dashboard->today());
     }
 }

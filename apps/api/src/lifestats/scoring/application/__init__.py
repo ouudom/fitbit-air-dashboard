@@ -1,0 +1,1 @@
+"""Score calculation use cases."""

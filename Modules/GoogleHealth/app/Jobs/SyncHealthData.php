@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Modules\GoogleHealth\Jobs;
 
-use App\Domain\Analytics\ScoringService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -32,9 +31,8 @@ final class SyncHealthData implements ShouldBeUnique, ShouldQueue
         return [(new WithoutOverlapping('health-sync'))->expireAfter(1800)];
     }
 
-    public function handle(HealthSynchronizer $synchronizer, ScoringService $scoring): void
+    public function handle(HealthSynchronizer $synchronizer): void
     {
-        $result = $synchronizer->run($this->days, $this->full);
-        $result['scoreDays'] = $scoring->computeRange(min((int) $result['days'], 90));
+        $synchronizer->run($this->days, $this->full);
     }
 }

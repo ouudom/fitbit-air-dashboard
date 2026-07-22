@@ -14,63 +14,93 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
-    build: .
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - lifestats_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
     restart: unless-stopped
     env_file: .env
     environment:
       APP_ENV: production
-      APP_DEBUG: "false"
-      APP_KEY: ${APP_KEY:?Run php artisan key:generate before deployment}
-      APP_URL: ${APP_URL:-http://localhost:3000}
-      DB_CONNECTION: pgsql
-      DATABASE_URL: postgres://fitbit:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/fitbit_air
-      SESSION_DRIVER: database
-      CACHE_STORE: database
-      QUEUE_CONNECTION: database
-      RUN_MIGRATIONS: "true"
+      DATABASE_URL: postgresql+asyncpg://fitbit:${POSTGRES_PASSWORD}@db:5432/fitbit_air
+      REDIS_URL: redis://redis:6379/0
+    command: ["sh", "-c", "alembic upgrade head && uvicorn lifestats.main:app --host 0.0.0.0 --port 8000"]
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "127.0.0.1:3000:8080"
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/up"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 30s
       timeout: 5s
       retries: 3
 
   worker:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
     restart: unless-stopped
-    command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--timeout=900"]
     env_file: .env
     environment:
       APP_ENV: production
-      APP_DEBUG: "false"
-      APP_KEY: ${APP_KEY:?Run php artisan key:generate before deployment}
-      DB_CONNECTION: pgsql
-      DATABASE_URL: postgres://fitbit:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/fitbit_air
-      QUEUE_CONNECTION: database
+      DATABASE_URL: postgresql+asyncpg://fitbit:${POSTGRES_PASSWORD}@db:5432/fitbit_air
+      REDIS_URL: redis://redis:6379/0
+    command: ["celery", "-A", "lifestats.google_health.infrastructure.celery_app:celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
     depends_on:
-      app:
+      api:
         condition: service_healthy
 
   scheduler:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
     restart: unless-stopped
-    command: ["php", "artisan", "schedule:work"]
     env_file: .env
     environment:
       APP_ENV: production
-      APP_DEBUG: "false"
-      APP_KEY: ${APP_KEY:?Run php artisan key:generate before deployment}
-      DB_CONNECTION: pgsql
-      DATABASE_URL: postgres://fitbit:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/fitbit_air
-      QUEUE_CONNECTION: database
+      DATABASE_URL: postgresql+asyncpg://fitbit:${POSTGRES_PASSWORD}@db:5432/fitbit_air
+      REDIS_URL: redis://redis:6379/0
+    command: ["celery", "-A", "lifestats.google_health.infrastructure.celery_app:celery_app", "beat", "--loglevel=INFO"]
     depends_on:
-      app:
+      api:
         condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - api
+      - web
 
 volumes:
   fitbit_air_db:
+  lifestats_redis:

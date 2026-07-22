@@ -1,25 +1,19 @@
 {
-    "$schema": "https://www.schemastore.org/package.json",
-    "name": "lifestats",
-    "private": true,
-    "type": "module",
-    "scripts": {
-        "build": "vite build",
-        "dev": "vite"
-    },
-    "devDependencies": {
-        "@types/react": "^19.2.17",
-        "@types/react-dom": "^19.2.3",
-        "@vitejs/plugin-react": "^6.0.3",
-        "concurrently": "^9.0.1",
-        "laravel-vite-plugin": "^3.1",
-        "typescript": "^5.9.3",
-        "vite": "^8.0.0"
-    },
-    "dependencies": {
-        "@inertiajs/react": "^3.6.1",
-        "@inertiajs/vite": "^3.6.1",
-        "react": "^19.2.8",
-        "react-dom": "^19.2.8"
-    }
+  "$schema": "https://www.schemastore.org/package.json",
+  "name": "lifestats",
+  "private": true,
+  "workspaces": ["apps/web"],
+  "overrides": {
+    "js-yaml": "^4.2.1",
+    "postcss": "^8.5.10",
+    "sharp": "^0.35.0"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace @lifestats/web",
+    "build": "npm run build --workspace @lifestats/web",
+    "lint": "npm run lint --workspace @lifestats/web",
+    "typecheck": "npm run typecheck --workspace @lifestats/web",
+    "openapi": "npm run openapi --workspace @lifestats/web",
+    "openapi:check": "npm run openapi && git diff --exit-code -- apps/web/src/lib/openapi.d.ts"
+  }
 }

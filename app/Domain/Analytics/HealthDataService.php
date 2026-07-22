@@ -52,12 +52,6 @@ final class HealthDataService
         return ['metrics' => $metrics, 'exercises' => $this->repository->exercises(100)];
     }
 
-    /** @return array{coverage: list<array<string, mixed>>, syncStates: list<array<string, mixed>>} */
-    public function explorer(): array
-    {
-        return ['coverage' => $this->repository->healthCoverage(), 'syncStates' => $this->repository->syncStates()];
-    }
-
     /** @param array<string, mixed> $row
      * @return array<string, mixed>
      */

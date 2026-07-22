@@ -1,21 +1,39 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { Button, Empty, ErrorState, ScoreCard, Section } from '../../components/ui';
-import type { DailyScore, DataQuality, PageProps, TimelineEvent } from '../../types';
+import { BarChart, Button, Empty, ErrorState, MetricCard, Section } from '../../components/ui';
+import type { Exercise, Metric, PageProps, SleepSession, VitalPoint } from '../../types';
 
-type Props = PageProps<{ date:string; scores:DailyScore[]; quality:DataQuality[]; timeline:TimelineEvent[]; nutrition:{calories:number;proteinG:number;entries:number}; strength:{sessions:number;volumeKg:number} }>;
-export default function Index({date,scores=[],quality=[],timeline=[],nutrition={calories:0,proteinG:0,entries:0},strength={sessions:0,volumeKg:0},errors}:Props){
-    const [syncing,setSyncing]=useState(false);
-    const sync=()=>router.post('/dashboard/sync',{days:30,full:true},{preserveScroll:true,onStart:()=>setSyncing(true),onFinish:()=>setSyncing(false)});
-    const coverage=Math.round(quality.reduce((sum,x)=>sum+x.coverage,0)/Math.max(1,quality.length)*100);
+type Props = PageProps<{
+    activity: { metrics: Record<string, Metric[]>; exercises: Exercise[] };
+    sleep: { sessions: SleepSession[]; latest: SleepSession | null; trend: Metric[] };
+    vitals: Record<string, VitalPoint[]>;
+    lastSync: number | null;
+}>;
+
+const latestMetric = (rows: Metric[] = []) => rows.at(-1)?.value ?? null;
+
+export default function Index({ activity, sleep, vitals, lastSync, errors }: Props) {
+    const [syncing, setSyncing] = useState(false);
+    const metrics = activity?.metrics ?? {};
+    const exercises = activity?.exercises ?? [];
+    const sync = () => router.post('/dashboard/sync', { days: 30, full: true }, {
+        preserveScroll: true,
+        onStart: () => setSyncing(true),
+        onFinish: () => setSyncing(false),
+    });
+    const syncedAt = lastSync ? new Date(lastSync < 10_000_000_000 ? lastSync * 1000 : lastSync).toLocaleString() : 'Never synced';
+
     return <><Head title="Today"/><main className="todayPage">
-        <div className="todayIntro"><div><p className="eyebrow">Personal health · {date}</p><h1>Today</h1><p className="subtitle">Signals, effort, recovery, and habits. Explained from source data.</p></div><Button onClick={sync} disabled={syncing}>{syncing?'Syncing…':'Sync Google Health'}</Button></div>
+        <div className="todayIntro"><div><p className="eyebrow">Google Health</p><h1>Today</h1><p className="subtitle">Latest activity, sleep, workouts, and health signals from source data.</p></div><Button onClick={sync} disabled={syncing}>{syncing ? 'Syncing…' : 'Sync Google Health'}</Button></div>
         <ErrorState message={errors?.sync}/>
-        <div className="scoreGrid">{scores.map(score=><ScoreCard key={score.type} score={score} href={score.type==='recovery'?'/dashboard/recovery':score.type==='sleep'?'/dashboard/sleep':'/dashboard/strain'}/>)}</div>
-        <section className="metricGrid"><Metric label="Nutrition" value={Math.round(nutrition.calories)} unit="kcal" detail={`${nutrition.entries} entries today`}/><Metric label="Protein" value={Math.round(nutrition.proteinG)} unit="g" detail="Logged today"/><Metric label="Strength" value={strength.sessions} detail="Recent sessions"/><Metric label="Data quality" value={coverage} unit="%" detail="Available inputs"/></section>
-        <Section title="Timeline" description="Sleep, workouts, meals, strength, and journal events.">{timeline.length?<div className="timeline">{timeline.map(event=><div className="timelineRow" key={`${event.source}:${event.id}`}><span>{event.startTime?new Date(event.startTime).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'•'}</span><div><strong>{event.title}</strong><small>{event.type}{event.detail?` · ${event.detail}`:''}</small></div></div>)}</div>:<Empty>No events yet. Sync Google Health or add a journal entry.</Empty>}</Section>
-        <section className="quickActions"><Quick href="/dashboard/journal" icon="＋" title="Journal" detail="Log a daily habit"/><Quick href="/dashboard/strength" icon="↗" title="Strength" detail="Record sets and load"/><Quick href="/dashboard/coach" icon="✦" title="Ask Coach" detail="Grounded in your data"/></section>
+        <section className="metricGrid">
+            <MetricCard label="Steps" value={latestMetric(metrics.steps)?.toLocaleString() ?? '—'} detail="Latest day"/>
+            <MetricCard label="Active Zone Minutes" value={latestMetric(metrics['active-zone-minutes']) ?? '—'} detail="Latest day"/>
+            <MetricCard label="Sleep" value={sleep?.latest?.minutesAsleep ? Math.round(sleep.latest.minutesAsleep / 60 * 10) / 10 : '—'} unit={sleep?.latest?.minutesAsleep ? 'h' : undefined} detail={sleep?.latest?.date ?? 'No session'}/>
+            <MetricCard label="Resting heart rate" value={vitals?.['daily-resting-heart-rate']?.[0]?.value ?? '—'} unit="bpm" detail="Latest reading"/>
+        </section>
+        <Section title="Steps" description="Last 14 synced days." action={<Link href="/fitness">Open Fitness</Link>}><BarChart data={(metrics.steps ?? []).map(point => ({ label: point.date.slice(5), value: point.value }))}/></Section>
+        <Section title="Recent workouts" description={`${exercises.length} synced sessions`} action={<Link href="/fitness">View all</Link>}>{exercises.length ? <div className="activityList">{exercises.slice(0, 5).map(exercise => <div className="activityRow" key={exercise.id}><span className="activityDot">●</span><div><strong>{exercise.displayName || exercise.type || 'Workout'}</strong><small>{exercise.startTime ? new Date(exercise.startTime).toLocaleString() : 'Time unavailable'}</small></div><b>{exercise.durationS ? `${Math.round(exercise.durationS / 60)} min` : ''}</b></div>)}</div> : <Empty>No workouts synced.</Empty>}</Section>
+        <Section title="Source status" description="Local views are projections. Google Health remains source of truth."><div className="state">Last sync: {syncedAt}</div></Section>
     </main></>;
 }
-function Metric({label,value,unit,detail}:{label:string;value:number;unit?:string;detail:string}){return <div className="metricCard"><span>{label}</span><strong>{value}{unit&&<small> {unit}</small>}</strong><span>{detail}</span></div>}
-function Quick({href,icon,title,detail}:{href:string;icon:string;title:string;detail:string}){return <Link href={href}><span>{icon}</span><strong>{title}</strong><small>{detail}</small></Link>}

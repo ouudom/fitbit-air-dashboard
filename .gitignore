@@ -23,6 +23,13 @@
 /storage/*.key
 /storage/pail
 /vendor
+/.venv
+/.mypy_cache
+/.pytest_cache
+/.ruff_cache
+**/__pycache__/
+apps/web/.next/
+apps/web/tsconfig.tsbuildinfo
 _ide_helper.php
 Homestead.json
 Homestead.yaml

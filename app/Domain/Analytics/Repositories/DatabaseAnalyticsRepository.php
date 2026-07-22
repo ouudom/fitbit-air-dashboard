@@ -33,18 +33,6 @@ final class DatabaseAnalyticsRepository implements AnalyticsRepository
         return $this->rows($this->database->table('exercises')->orderByDesc('start_time')->limit($limit)->get()->all());
     }
 
-    public function healthCoverage(): array
-    {
-        return $this->rows($this->database->table('health_records')
-            ->selectRaw('data_type, count(*)::int AS count, max(coalesce(date, start_time)) AS latest')
-            ->groupBy('data_type')->orderBy('data_type')->get()->all());
-    }
-
-    public function syncStates(): array
-    {
-        return $this->rows($this->database->table('sync_state')->orderBy('data_type')->get()->all());
-    }
-
     public function foodLogs(?string $date = null): array
     {
         $query = $this->database->table('food_logs');
@@ -55,68 +43,11 @@ final class DatabaseAnalyticsRepository implements AnalyticsRepository
         return $this->rows($query->orderByDesc('date')->orderByDesc('created_at')->get()->all());
     }
 
-    public function journal(?string $from = null, ?string $to = null): array
-    {
-        $query = $this->database->table('journal_entries');
-        if ($from !== null && $to !== null) {
-            $query->whereBetween('date', [$from, $to]);
-        }
-
-        return $this->rows($query->orderByDesc('date')->orderByDesc('occurred_at')->get()->all());
-    }
-
-    public function strengthSessions(int $limit = 50): array
-    {
-        $sessions = $this->rows($this->database->table('strength_sessions')
-            ->orderByDesc('date')->orderByDesc('start_time')->limit($limit)->get()->all());
-        $sets = $this->rows($this->database->table('strength_sets')->get()->all());
-
-        foreach ($sessions as &$session) {
-            $session['sets'] = array_values(array_filter($sets, fn (array $set): bool => $set['sessionId'] === $session['id']));
-        }
-
-        return $sessions;
-    }
-
-    public function scores(string $type, int $days): array
-    {
-        return $this->rows($this->database->table('daily_scores')->where('score_type', $type)
-            ->orderByDesc('date')->limit($days)->get()->all());
-    }
-
-    public function quality(string $date): array
-    {
-        return $this->rows($this->database->table('data_quality')->where('date', $date)->orderBy('data_type')->get()->all());
-    }
-
-    public function timeline(string $date): array
-    {
-        return $this->rows($this->database->table('timeline_events')->where('date', $date)->orderBy('start_time')->get()->all());
-    }
-
     public function meta(string $key): ?string
     {
         $value = $this->database->table('meta')->where('key', $key)->value('value');
 
         return $value === null ? null : (string) $value;
-    }
-
-    public function saveScores(array $scores): void
-    {
-        foreach ($scores as $score) {
-            $row = $this->snake($score, ['inputs', 'explanation']);
-            $this->database->table('daily_scores')->upsert(
-                [$row], ['date', 'score_type', 'model_version'],
-                ['value', 'confidence', 'state', 'inputs', 'explanation', 'updated_at'],
-            );
-        }
-    }
-
-    public function saveQuality(array $quality): void
-    {
-        $this->database->table('data_quality')->upsert(
-            [$this->snake($quality)], ['date', 'data_type'], ['status', 'coverage', 'reason', 'updated_at'],
-        );
     }
 
     /** @param list<stdClass|array<string, mixed>> $rows
@@ -137,20 +68,5 @@ final class DatabaseAnalyticsRepository implements AnalyticsRepository
 
             return $normalized;
         }, $rows);
-    }
-
-    /** @param array<string, mixed> $values
-     * @param  list<string>  $jsonKeys
-     * @return array<string, mixed>
-     */
-    private function snake(array $values, array $jsonKeys = []): array
-    {
-        $row = [];
-        foreach ($values as $key => $value) {
-            $name = strtolower((string) preg_replace('/(?<!^)[A-Z]/', '_$0', $key));
-            $row[$name] = in_array($key, $jsonKeys, true) ? json_encode($value, JSON_THROW_ON_ERROR) : $value;
-        }
-
-        return $row;
     }
 }
