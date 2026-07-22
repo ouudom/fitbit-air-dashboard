@@ -12,18 +12,6 @@ class MetricResponse(BaseModel):
     availability: str
 
 
-class ScoreResponse(BaseModel):
-    key: str
-    label: str
-    value: float | None
-    status: str
-    modelVersion: str
-    components: dict[str, float]
-    missingInputs: list[str]
-    explanation: str
-    disclaimer: str
-
-
 class TimelineItemResponse(BaseModel):
     id: str
     kind: str
@@ -46,6 +34,5 @@ class DashboardResponse(BaseModel):
     date: str
     timezone: str
     metrics: list[MetricResponse]
-    scores: list[ScoreResponse]
     timeline: list[TimelineItemResponse]
     sync: list[SyncStateResponse]

@@ -7,7 +7,6 @@ from src.core.config import get_settings
 from src.core.database import SessionFactory
 from src.modules.google_health.models import GoogleHealthConnection, SyncJob
 from src.modules.google_health.sync import SyncService
-from src.modules.scoring.service import ScoreService
 
 settings = get_settings()
 celery_app = Celery("lifestats", broker=settings.redis_url, backend=settings.redis_url)
@@ -44,7 +43,6 @@ async def _run_job(job_id: UUID) -> None:
         await db.commit()
         try:
             result = await SyncService(db, settings, job.user_id).run(job.requested_days)
-            await ScoreService(db).calculate_recent(settings.timezone, days=job.requested_days)
             job.status = "complete" if not result["errors"] else "failed"
             job.result = result
             job.error = None if job.status == "complete" else "Some data types failed"

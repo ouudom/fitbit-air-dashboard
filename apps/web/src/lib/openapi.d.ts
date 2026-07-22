@@ -179,8 +179,6 @@ export interface components {
             timezone: string;
             /** Metrics */
             metrics: components["schemas"]["MetricResponse"][];
-            /** Scores */
-            scores: components["schemas"]["ScoreResponse"][];
             /** Timeline */
             timeline: components["schemas"]["TimelineItemResponse"][];
             /** Sync */
@@ -209,29 +207,6 @@ export interface components {
             freshness: string;
             /** Availability */
             availability: string;
-        };
-        /** ScoreResponse */
-        ScoreResponse: {
-            /** Key */
-            key: string;
-            /** Label */
-            label: string;
-            /** Value */
-            value: number | null;
-            /** Status */
-            status: string;
-            /** Modelversion */
-            modelVersion: string;
-            /** Components */
-            components: {
-                [key: string]: number;
-            };
-            /** Missinginputs */
-            missingInputs: string[];
-            /** Explanation */
-            explanation: string;
-            /** Disclaimer */
-            disclaimer: string;
         };
         /** SessionResponse */
         SessionResponse: {

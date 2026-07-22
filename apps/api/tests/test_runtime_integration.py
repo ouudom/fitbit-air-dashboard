@@ -35,12 +35,7 @@ async def test_setup_session_and_empty_dashboard() -> None:
         assert dashboard.status_code == 200, dashboard.text
         payload = dashboard.json()
         assert payload["timezone"] == "Asia/Phnom_Penh"
-        assert [score["label"] for score in payload["scores"]] == [
-            "LifeStats Readiness",
-            "LifeStats Stress",
-            "LifeStats Energy",
-        ]
-        assert all(score["value"] is None for score in payload["scores"])
+        assert "scores" not in payload
 
         repeat_setup = await client.post(
             "/api/v1/setup",

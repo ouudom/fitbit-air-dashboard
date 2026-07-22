@@ -1,12 +1,10 @@
 import json
 from datetime import UTC, date, datetime
-from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import Settings
-from src.modules.scoring.domain import MODEL_VERSION
 from src.modules.timeline.service import TimelineService
 
 
@@ -20,7 +18,6 @@ class DashboardService:
             "date": day.isoformat(),
             "timezone": self.settings.app_timezone,
             "metrics": await self._metrics(day),
-            "scores": await self._scores(day),
             "timeline": [
                 {
                     "id": item.id,
@@ -77,44 +74,6 @@ class DashboardService:
                 sleep_updated,
             ),
         ]
-
-    async def _scores(self, day: date) -> list[dict[str, object]]:
-        rows = (
-            await self.db.execute(
-                text(
-                    "SELECT score_type, value, state, explanation FROM daily_scores "
-                    "WHERE date=:date AND model_version=:version"
-                ),
-                {"date": day.isoformat(), "version": MODEL_VERSION},
-            )
-        ).mappings()
-        found = {row["score_type"]: row for row in rows}
-        result: list[dict[str, object]] = []
-        for score_type in ("readiness", "stress", "energy"):
-            row = found.get(score_type)
-            explanation: dict[str, Any] = {}
-            if row and row["explanation"]:
-                explanation = (
-                    row["explanation"]
-                    if isinstance(row["explanation"], dict)
-                    else json.loads(row["explanation"])
-                )
-            result.append(
-                {
-                    "key": score_type,
-                    "label": f"LifeStats {score_type.title()}",
-                    "value": row["value"] if row else None,
-                    "status": row["state"] if row else "unavailable",
-                    "modelVersion": MODEL_VERSION,
-                    "components": explanation.get("components", {}),
-                    "missingInputs": explanation.get("missingInputs", ["baseline"]),
-                    "explanation": explanation.get(
-                        "summary", "Sync enough personal history to calculate this estimate."
-                    ),
-                    "disclaimer": "Wellness estimate, not medical advice.",
-                }
-            )
-        return result
 
     async def _sync(self) -> list[dict[str, object]]:
         rows = (
