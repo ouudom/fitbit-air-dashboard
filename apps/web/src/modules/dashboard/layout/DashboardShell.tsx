@@ -53,7 +53,6 @@ export function DashboardShell({
         </div>
 
         <nav className="railNavigation" aria-label="Primary">
-          <p>Health views</p>
           {navigation.map((item) => (
             <Link
               aria-current={activeView === item.id ? "page" : undefined}
@@ -67,18 +66,18 @@ export function DashboardShell({
           ))}
         </nav>
 
-        <div className="accountBlock">
+        <footer className="sidebarFooter">
           <span className="avatar" aria-hidden="true">
             {email.charAt(0).toUpperCase()}
           </span>
-          <div>
-            <strong>Private account</strong>
-            <small title={email}>{email}</small>
+          <div className="accountIdentity">
+            <strong title={email}>{email}</strong>
+            <small>Private account</small>
           </div>
           <button className="signOutButton" disabled={logoutPending} onClick={onLogout}>
-            {logoutPending ? "Signing out…" : "Sign out"}
+            {logoutPending ? "Wait…" : "Sign out"}
           </button>
-        </div>
+        </footer>
       </aside>
 
       <header className="mobileHeader">

@@ -209,65 +209,66 @@ button {
   color: var(--accent-strong);
 }
 
-.accountBlock {
+.sidebarFooter {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 10px;
-  padding: 16px;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 14px;
   border-top: 1px solid var(--border);
-  background: rgb(15 17 19 / 70%);
+  background: rgb(15 17 19 / 55%);
+}
+
+.accountIdentity {
+  min-width: 0;
 }
 
 .avatar {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   place-items: center;
   border: 1px solid var(--border-strong);
   border-radius: 50%;
   background: var(--surface-raised);
-  color: var(--accent-strong);
-  font-size: 12px;
-  font-weight: 800;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 750;
 }
 
-.accountBlock div {
-  min-width: 0;
-}
-
-.accountBlock strong,
-.accountBlock small {
+.accountIdentity strong,
+.accountIdentity small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.accountBlock strong {
-  margin: 2px 0 3px;
-  font-size: 11px;
+.accountIdentity strong {
+  font-size: 9px;
+  font-weight: 650;
 }
 
-.accountBlock small {
+.accountIdentity small {
+  margin-top: 3px;
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: 8px;
 }
 
 .signOutButton {
-  grid-column: 1 / -1;
-  min-height: 36px;
-  border: 1px solid transparent;
-  border-radius: 9px;
+  min-height: 32px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 7px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 10px;
-  font-weight: 700;
-  text-align: left;
+  font-size: 9px;
+  font-weight: 650;
+  transition: 120ms ease;
 }
 
 .signOutButton:hover {
-  border-color: rgb(239 106 106 / 28%);
   background: rgb(239 106 106 / 8%);
   color: #ffaaaa;
 }
