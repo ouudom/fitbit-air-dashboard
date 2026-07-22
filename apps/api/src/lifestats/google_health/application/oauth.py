@@ -17,7 +17,11 @@ class OAuthService:
     def __init__(self, db: AsyncSession, settings: Settings) -> None:
         self.db = db
         self.settings = settings
-        self.cipher = TokenCipher(settings.token_encryption_key, settings.app_key)
+        self.cipher = TokenCipher(
+            settings.token_encryption_key,
+            settings.app_key,
+            settings.google_client_secret,
+        )
 
     async def authorization_url(self, user_id: int) -> str:
         await self.migrate_legacy_connection(user_id)

@@ -9,12 +9,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
 
     app_env: str = "local"
-    app_url: str = "http://localhost:3000"
     app_timezone: str = "Asia/Phnom_Penh"
     database_url: str = "postgresql+asyncpg://fitbit:change-me@localhost:5432/fitbit_air"
     redis_url: str = "redis://localhost:6379/0"
     setup_token: str = ""
-    session_secret: str = "development-only-change-me"
     session_lifetime_hours: int = 24 * 7
     token_encryption_key: str = ""
     app_key: str = ""

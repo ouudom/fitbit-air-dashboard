@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.padding import PKCS7
@@ -13,11 +14,14 @@ def _urlsafe_decode(value: str) -> bytes:
 
 
 class TokenCipher:
-    def __init__(self, secret: str, laravel_app_key: str = "") -> None:
+    def __init__(self, secret: str, laravel_app_key: str = "", legacy_v1_secret: str = "") -> None:
         if not secret:
             raise RuntimeError("TOKEN_ENCRYPTION_KEY is required")
         self.key = hashlib.sha256(secret.encode()).digest()
         self.laravel_app_key = laravel_app_key
+        self.legacy_v1_key = (
+            hashlib.sha256(legacy_v1_secret.encode()).digest() if legacy_v1_secret else None
+        )
 
     def encrypt(self, value: str | None) -> str | None:
         if not value:
@@ -36,7 +40,13 @@ class TokenCipher:
             return AESGCM(self.key).decrypt(raw[:12], raw[12:], None).decode()
         if value.startswith("enc:v1:"):
             raw = _urlsafe_decode(value[7:])
-            return AESGCM(self.key).decrypt(raw[:12], raw[28:] + raw[12:28], None).decode()
+            encrypted = raw[28:] + raw[12:28]
+            try:
+                return AESGCM(self.key).decrypt(raw[:12], encrypted, None).decode()
+            except InvalidTag:
+                if self.legacy_v1_key is None or self.legacy_v1_key == self.key:
+                    raise
+                return AESGCM(self.legacy_v1_key).decrypt(raw[:12], encrypted, None).decode()
         try:
             return self._decrypt_laravel(value)
         except Exception:

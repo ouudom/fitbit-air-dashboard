@@ -97,7 +97,7 @@ class TimelineService:
                 kind="habit",
                 title=row["title"],
                 occurred_at=row["occurred_at"],
-                source="Google Health" if row["source"] == "google-health" else "LifeStats",
+                source="LifeStats",
                 detail=(f"{row['value']:g} {row['unit'] or ''}".strip()),
             )
             for row in rows

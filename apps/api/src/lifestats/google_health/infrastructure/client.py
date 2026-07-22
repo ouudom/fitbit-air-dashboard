@@ -24,7 +24,11 @@ class GoogleHealthClient:
         self.settings = settings
         self.user_id = user_id
         self.http = httpx.AsyncClient(timeout=30, transport=transport)
-        self.cipher = TokenCipher(settings.token_encryption_key, settings.app_key)
+        self.cipher = TokenCipher(
+            settings.token_encryption_key,
+            settings.app_key,
+            settings.google_client_secret,
+        )
 
     async def close(self) -> None:
         await self.http.aclose()

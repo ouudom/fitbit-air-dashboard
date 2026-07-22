@@ -21,3 +21,15 @@ def test_legacy_v1_compatibility() -> None:
     body, tag = encrypted[:-16], encrypted[-16:]
     value = "enc:v1:" + base64.urlsafe_b64encode(nonce + tag + body).decode().rstrip("=")
     assert TokenCipher(secret).decrypt(value) == "legacy-token"
+
+
+def test_legacy_v1_uses_previous_secret_fallback() -> None:
+    legacy_secret = "old-google-client-secret"
+    key = hashlib.sha256(legacy_secret.encode()).digest()
+    nonce = os.urandom(12)
+    encrypted = AESGCM(key).encrypt(nonce, b"legacy-token", None)
+    body, tag = encrypted[:-16], encrypted[-16:]
+    value = "enc:v1:" + base64.urlsafe_b64encode(nonce + tag + body).decode().rstrip("=")
+
+    cipher = TokenCipher("new-token-secret", legacy_v1_secret=legacy_secret)
+    assert cipher.decrypt(value) == "legacy-token"
