@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-export type DashboardView = "overview" | "sleep";
+export type DashboardView = "overview" | "sleep" | "agents";
 
 type DashboardShellProps = {
   activeView: DashboardView;
@@ -66,6 +66,15 @@ export function DashboardShell({
           ))}
         </nav>
 
+        <Link
+          aria-current={activeView === "agents" ? "page" : undefined}
+          className={activeView === "agents" ? "agentAccessLink active" : "agentAccessLink"}
+          href="/settings/agent-access"
+        >
+          <span aria-hidden="true">⌘</span>
+          Agent access
+        </Link>
+
         <footer className="sidebarFooter">
           <span className="avatar" aria-hidden="true">
             {email.charAt(0).toUpperCase()}
@@ -85,7 +94,12 @@ export function DashboardShell({
           LS
         </span>
         <strong>LIFESTATS</strong>
-        <span className="mobileSync">{syncLabel}</span>
+        <div className="mobileUtilities">
+          <span className="mobileSync">{syncLabel}</span>
+          <Link aria-label="Agent access" href="/settings/agent-access">
+            ⌘
+          </Link>
+        </div>
       </header>
 
       <main className="dashboardMain">{children}</main>

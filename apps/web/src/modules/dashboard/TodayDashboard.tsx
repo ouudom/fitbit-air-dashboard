@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import type { Dashboard } from "@/lib/types";
+import { AgentAccess } from "@/modules/agent-access/AgentAccess";
 import { DashboardShell, type DashboardView } from "./layout/DashboardShell";
 import { SleepOverview } from "./views/SleepOverview";
 import { TodayOverview } from "./views/TodayOverview";
@@ -74,14 +75,14 @@ export function TodayDashboard({ email, view }: { email: string; view: Dashboard
       onLogout={() => logout.mutate()}
       syncLabel={syncLabel}
     >
-      {dashboard.isPending && (
+      {view !== "agents" && dashboard.isPending && (
         <section className="contentState" aria-live="polite">
           <span className="spinner" aria-hidden="true" />
           <p>Loading Google Health data…</p>
         </section>
       )}
 
-      {dashboard.isError && (
+      {view !== "agents" && dashboard.isError && (
         <section className="contentState" role="alert">
           <span className="stateIcon">!</span>
           <h1>Dashboard unavailable</h1>
@@ -108,6 +109,8 @@ export function TodayDashboard({ email, view }: { email: string; view: Dashboard
       {data && view === "sleep" && (
         <SleepOverview data={data} date={selectedDate} onDateChange={setDate} />
       )}
+
+      {view === "agents" && <AgentAccess />}
     </DashboardShell>
   );
 }
