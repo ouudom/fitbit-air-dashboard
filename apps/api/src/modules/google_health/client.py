@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import random
 from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime, timedelta
@@ -17,6 +18,7 @@ from src.modules.google_health.registry import DataType, FetchMethod
 
 MAX_REQUEST_ATTEMPTS = 5
 MAX_RETRY_DELAY_SECONDS = 60.0
+logger = logging.getLogger(__name__)
 
 
 class GoogleHealthClient:
@@ -112,7 +114,18 @@ class GoogleHealthClient:
             except httpx.TransportError:
                 if attempt == MAX_REQUEST_ATTEMPTS - 1:
                     raise
-                await asyncio.sleep(_retry_delay(attempt))
+                delay = _retry_delay(attempt)
+                logger.warning(
+                    "Google Health transport error; retrying",
+                    extra={
+                        "event": "google_health_request_retry",
+                        "method": method,
+                        "path": path,
+                        "attempt": attempt + 1,
+                        "delay_seconds": round(delay, 2),
+                    },
+                )
+                await asyncio.sleep(delay)
                 continue
             if response.status_code == 401 and not refreshed:
                 await self.access_token(force_refresh=True)
@@ -124,7 +137,19 @@ class GoogleHealthClient:
                 await self.db.commit()
             retryable = response.status_code in {408, 429} or response.status_code >= 500
             if retryable and attempt < MAX_REQUEST_ATTEMPTS - 1:
-                await asyncio.sleep(_retry_delay(attempt, response))
+                delay = _retry_delay(attempt, response)
+                logger.warning(
+                    "Google Health response retry scheduled",
+                    extra={
+                        "event": "google_health_request_retry",
+                        "method": method,
+                        "path": path,
+                        "attempt": attempt + 1,
+                        "delay_seconds": round(delay, 2),
+                        "upstream_status": response.status_code,
+                    },
+                )
+                await asyncio.sleep(delay)
                 continue
             response.raise_for_status()
             return dict(response.json()) if response.content else {}

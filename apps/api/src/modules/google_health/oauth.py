@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import timedelta
 from urllib.parse import urlencode
@@ -13,6 +14,8 @@ from src.modules.google_health.crypto import TokenCipher
 from src.modules.google_health.models import GoogleHealthConnection
 from src.modules.google_health.oauth_state import OAuthStateStore, RedisOAuthStateStore
 from src.modules.google_health.sync import seed_sync_jobs
+
+logger = logging.getLogger(__name__)
 
 
 class OAuthService:
@@ -34,6 +37,13 @@ class OAuthService:
     async def authorization_url(self, user_id: int) -> str:
         state = secrets.token_urlsafe(32)
         await self.state_store.issue(state, user_id)
+        logger.info(
+            "Google Health OAuth authorization started",
+            extra={
+                "event": "google_health_oauth_started",
+                "user_id": user_id,
+            },
+        )
         return (
             self.settings.google_auth_url
             + "?"
@@ -100,6 +110,15 @@ class OAuthService:
         connection.status = "active"
         await self.db.commit()
         await seed_sync_jobs(self.db, connection)
+        logger.info(
+            "Google Health OAuth connection established",
+            extra={
+                "event": "google_health_oauth_connected",
+                "user_id": user_id,
+                "connection_id": str(connection.id),
+                "scope_count": len(connection.scopes),
+            },
+        )
         return user_id
 
     async def revoke_token(self, connection: GoogleHealthConnection) -> None:
@@ -115,5 +134,19 @@ class OAuthService:
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
         if response.status_code == 400:
+            logger.info(
+                "Google Health token already revoked",
+                extra={
+                    "event": "google_health_oauth_revoked",
+                    "connection_id": str(connection.id),
+                },
+            )
             return
         response.raise_for_status()
+        logger.info(
+            "Google Health token revoked",
+            extra={
+                "event": "google_health_oauth_revoked",
+                "connection_id": str(connection.id),
+            },
+        )

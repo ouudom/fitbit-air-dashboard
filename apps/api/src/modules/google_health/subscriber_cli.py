@@ -1,15 +1,18 @@
 import argparse
 import asyncio
 import json
+import logging
 from collections.abc import Sequence
 
 import google.auth
 from google.auth.transport.requests import Request
 
 from src.core.config import get_settings
+from src.core.logging import configure_logging
 from src.modules.google_health.webhooks import GoogleHealthSubscriberClient
 
 CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
+logger = logging.getLogger(__name__)
 
 
 def run(argv: Sequence[str] | None = None) -> None:
@@ -21,6 +24,7 @@ def run(argv: Sequence[str] | None = None) -> None:
 
 async def _run(command: str) -> None:
     settings = get_settings()
+    configure_logging(settings.app_env, settings.log_level)
     missing = [
         name
         for name, value in (
@@ -55,6 +59,10 @@ async def _run(command: str) -> None:
         credentials.token,
     )
     try:
+        logger.info(
+            "Google Health subscriber command started",
+            extra={"event": "google_health_subscriber_started", "command": command},
+        )
         result: dict[str, object] | None
         if command == "apply":
             result = await client.apply(
@@ -63,6 +71,10 @@ async def _run(command: str) -> None:
             )
         else:
             result = await client.inspect()
+        logger.info(
+            "Google Health subscriber command completed",
+            extra={"event": "google_health_subscriber_completed", "command": command},
+        )
         print("not found" if result is None else json.dumps(result, indent=2, sort_keys=True))
     finally:
         await client.close()

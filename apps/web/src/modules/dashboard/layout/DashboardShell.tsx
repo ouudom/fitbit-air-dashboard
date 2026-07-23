@@ -19,7 +19,7 @@ const navigation: Array<{
   shortLabel: string;
   icon: string;
 }> = [
-  { id: "overview", href: "/dashboard", label: "Dashboard", shortLabel: "Dashboard", icon: "⌂" },
+  { id: "overview", href: "/dashboard", label: "Today", shortLabel: "Today", icon: "⌂" },
   { id: "sleep", href: "/sleep", label: "Sleep", shortLabel: "Sleep", icon: "☾" },
 ];
 

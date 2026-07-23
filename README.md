@@ -83,6 +83,29 @@ npm run openapi:check
 docker compose build
 ```
 
+## Production deployment checklist
+
+- Serve the proxy through HTTPS. Production session cookies are secure-only.
+- Replace every `.env` placeholder.
+- Keep `TOKEN_ENCRYPTION_KEY` backed up; rotation needs an explicit token migration.
+- Set Google's authorized callback to the exact HTTPS `REDIRECT_URI`.
+- Start PostgreSQL, Redis, API, worker, and scheduler before connecting Google Health.
+- Leave webhooks disabled until the public HTTPS webhook URL and subscriber are ready.
+- Back up PostgreSQL and the encryption key separately.
+
+Production configuration fails fast when required OAuth, database, Redis, callback,
+setup, or encryption values are missing. Enabling webhooks also requires the full
+webhook configuration.
+
+### Logging
+
+- `LOG_LEVEL` controls API and worker verbosity; default is `INFO`.
+- Production API and worker logs use JSON on stdout.
+- Every API response returns `X-Request-ID`; trusted incoming IDs are preserved.
+- Google Health logs contain lifecycle metadata, never tokens or raw health payloads.
+- Proxy access logging stays disabled so OAuth callback codes never enter logs.
+- Docker rotates each service at five 10 MB files.
+
 ## Fresh database cutover
 
 `20260723_0001_init` is a fresh PostgreSQL baseline. It does not import the old

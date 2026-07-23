@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     app_env: str = "local"
     app_timezone: str = "Asia/Phnom_Penh"
+    log_level: str = "INFO"
     database_url: str = "postgresql+asyncpg://lifestats:change-me@localhost:5432/lifestats"
     redis_url: str = "redis://localhost:6379/0"
     setup_token: str = ""
@@ -51,6 +52,56 @@ class Settings(BaseSettings):
         if value.startswith("postgresql://"):
             return value.replace("postgresql://", "postgresql+asyncpg://", 1)
         return value
+
+    @field_validator("log_level")
+    @classmethod
+    def validate_log_level(cls, value: str) -> str:
+        normalized = value.upper()
+        if normalized not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            raise ValueError("LOG_LEVEL must be DEBUG, INFO, WARNING, ERROR, or CRITICAL")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_production_configuration(self) -> "Settings":
+        if self.app_env != "production":
+            return self
+
+        required = {
+            "DATABASE_URL": self.database_url,
+            "REDIS_URL": self.redis_url,
+            "SETUP_TOKEN": self.setup_token,
+            "TOKEN_ENCRYPTION_KEY": self.token_encryption_key,
+            "GOOGLE_CLIENT_ID": self.google_client_id,
+            "GOOGLE_CLIENT_SECRET": self.google_client_secret,
+            "REDIRECT_URI": self.redirect_uri,
+        }
+        missing = [name for name, value in required.items() if not value]
+        if missing:
+            raise ValueError(f"Missing production settings: {', '.join(missing)}")
+        if "change-me" in self.database_url:
+            raise ValueError("DATABASE_URL still contains placeholder credentials")
+        if len(self.setup_token) < 32:
+            raise ValueError("SETUP_TOKEN must contain at least 32 characters in production")
+        if len(self.token_encryption_key) < 32:
+            raise ValueError(
+                "TOKEN_ENCRYPTION_KEY must contain at least 32 characters in production"
+            )
+        if not self.redirect_uri.startswith("https://"):
+            raise ValueError("REDIRECT_URI must use HTTPS in production")
+
+        if self.google_health_webhook_enabled:
+            webhook_required = {
+                "GOOGLE_CLOUD_PROJECT_NUMBER": self.google_cloud_project_number,
+                "GOOGLE_HEALTH_SUBSCRIBER_ID": self.google_health_subscriber_id,
+                "GOOGLE_HEALTH_WEBHOOK_URL": self.google_health_webhook_url,
+                "GOOGLE_HEALTH_WEBHOOK_AUTH_SECRET": self.google_health_webhook_auth_secret,
+            }
+            webhook_missing = [name for name, value in webhook_required.items() if not value]
+            if webhook_missing:
+                raise ValueError(f"Missing webhook settings: {', '.join(webhook_missing)}")
+            if not self.google_health_webhook_url.startswith("https://"):
+                raise ValueError("GOOGLE_HEALTH_WEBHOOK_URL must use HTTPS in production")
+        return self
 
     @property
     def secure_cookies(self) -> bool:

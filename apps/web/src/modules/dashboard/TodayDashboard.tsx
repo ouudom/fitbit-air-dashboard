@@ -59,7 +59,11 @@ export function TodayDashboard({ email, view }: { email: string; view: Dashboard
   const syncLabel = sync.isPending || syncRunning
     ? "Syncing"
     : lastSync
-      ? `Synced ${new Date(lastSync).toLocaleDateString([], { month: "short", day: "numeric" })}`
+      ? `Synced ${new Date(lastSync).toLocaleDateString([], {
+          month: "short",
+          day: "numeric",
+          timeZone: data?.timezone,
+        })}`
       : "Not synced";
 
   return (
