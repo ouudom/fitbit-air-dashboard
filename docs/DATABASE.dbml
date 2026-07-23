@@ -1,6 +1,6 @@
 Project LifeStatsV2 {
   database_type: "PostgreSQL"
-  Note: "Proposed target schema. Google Health remains authoritative; health tables are rebuildable projections. All timestamptz values are stored as UTC instants. Requires additive migration and verified legacy-token cutover."
+  Note: "Current fresh-init target schema. Google Health remains authoritative; health tables are rebuildable projections. All timestamptz values are stored as UTC instants."
 }
 
 Enum connection_status {
@@ -30,10 +30,10 @@ Enum gh_fetch_method {
 }
 
 Table users {
-  id uuid [pk, default: `gen_random_uuid()`]
-  email varchar(320) [not null, unique]
+  id bigint [pk, increment]
+  email varchar(255) [not null, unique]
   name varchar(255) [not null]
-  password_hash varchar(255) [not null]
+  password varchar(255) [not null]
   timezone varchar(64) [not null, default: 'Asia/Phnom_Penh', note: "IANA timezone name"]
   email_verified_at timestamptz
   created_at timestamptz [not null, default: `now()`]
@@ -44,7 +44,7 @@ Table users {
 
 Table sessions {
   id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [not null]
+  user_id bigint [not null]
   token_hash char(64) [not null, unique]
   csrf_token_hash char(64) [not null]
   expires_at timestamptz [not null]
@@ -63,8 +63,8 @@ Table sessions {
 
 Table gh_connections {
   id uuid [pk, default: `gen_random_uuid()`]
-  user_id uuid [not null, unique]
-  provider_user_id text [not null, unique]
+  user_id bigint [not null, unique]
+  provider_user_id text [unique, note: "Temporarily null inside OAuth callback until identity lookup completes"]
   access_token_ciphertext text [not null]
   refresh_token_ciphertext text
   token_expires_at timestamptz
@@ -144,6 +144,12 @@ Table gh_webhook_events {
   provider_user_id text [not null]
   provider_subscription_name text
   data_type_ids text[] [not null]
+  operation varchar(32)
+  interval_start timestamptz
+  interval_end timestamptz
+  civil_start_date date
+  civil_end_date date
+  event_hash char(64) [not null, unique, note: "Canonical retry-deduplication hash"]
   raw_payload jsonb [not null, note: "Complete verified webhook request body"]
   signature_verified boolean [not null]
   status sync_status [not null, default: 'queued']

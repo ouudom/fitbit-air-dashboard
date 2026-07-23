@@ -1,10 +1,17 @@
-import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import text
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import Settings
+from src.modules.auth.models import User
+from src.modules.google_health.models import (
+    GoogleHealthConnection,
+    GoogleHealthRecord,
+    GoogleHealthSyncJob,
+)
+from src.modules.google_health.sync import _number
 from src.modules.timeline.service import TimelineService
 
 
@@ -14,10 +21,12 @@ class DashboardService:
         self.settings = settings
 
     async def get(self, user_id: int, day: date) -> dict[str, object]:
+        timezone_name = await self.db.scalar(select(User.timezone).where(User.id == user_id))
+        timezone = ZoneInfo(timezone_name or self.settings.app_timezone)
         return {
             "date": day.isoformat(),
-            "timezone": self.settings.app_timezone,
-            "metrics": await self._metrics(day),
+            "timezone": timezone.key,
+            "metrics": await self._metrics(user_id, day, timezone),
             "timeline": [
                 {
                     "id": item.id,
@@ -28,44 +37,56 @@ class DashboardService:
                     "detail": item.detail,
                     "freshness": item.freshness,
                 }
-                for item in await TimelineService(self.db).for_day(
-                    user_id, day, self.settings.timezone
-                )
+                for item in await TimelineService(self.db).for_day(user_id, day, timezone)
             ],
-            "sync": await self._sync(),
+            "sync": await self._sync(user_id),
         }
 
-    async def _metrics(self, day: date) -> list[dict[str, object]]:
-        steps = await self.db.scalar(
-            text("SELECT value FROM daily_metrics WHERE date=:date AND metric='steps'"),
-            {"date": day.isoformat()},
+    async def _metrics(
+        self, user_id: int, day: date, timezone: ZoneInfo
+    ) -> list[dict[str, object]]:
+        records = await self._records_for_day(
+            user_id,
+            day,
+            timezone,
+            ("steps", "sleep"),
         )
-        sleep_row = (
+        step_records = [record for record in records if record.data_type == "steps"]
+        steps = sum(
+            value for record in step_records if (value := _number(record.raw_payload)) is not None
+        )
+        sleep_row = next(
             (
-                await self.db.execute(
-                    text(
-                        "SELECT payload, updated_at FROM health_records "
-                        "WHERE data_type='sleep' AND date=:date ORDER BY updated_at DESC LIMIT 1"
-                    ),
-                    {"date": day.isoformat()},
+                record
+                for record in sorted(
+                    (item for item in records if item.data_type == "sleep"),
+                    key=lambda item: item.last_synced_at,
+                    reverse=True,
                 )
-            )
-            .mappings()
-            .first()
+            ),
+            None,
         )
         sleep_minutes = None
         sleep_updated = None
         if sleep_row:
-            payload = (
-                sleep_row["payload"]
-                if isinstance(sleep_row["payload"], dict)
-                else json.loads(sleep_row["payload"])
-            )
+            payload = sleep_row.raw_payload
             sleep = payload.get("sleep", payload)
-            sleep_minutes = sleep.get("summary", {}).get("minutesAsleep")
-            sleep_updated = sleep_row["updated_at"]
+            if isinstance(sleep, dict):
+                summary = sleep.get("summary", {})
+                if isinstance(summary, dict):
+                    sleep_minutes = summary.get("minutesAsleep")
+            sleep_updated = sleep_row.last_synced_at
         return [
-            _metric("Steps", float(steps) if steps is not None else None, "steps", day, None),
+            _metric(
+                "Steps",
+                steps if step_records else None,
+                "steps",
+                day,
+                max(
+                    (record.last_synced_at for record in step_records),
+                    default=None,
+                ),
+            ),
             _metric(
                 "Sleep",
                 round(float(sleep_minutes) / 60, 1) if sleep_minutes is not None else None,
@@ -75,34 +96,73 @@ class DashboardService:
             ),
         ]
 
-    async def _sync(self) -> list[dict[str, object]]:
-        rows = (
-            await self.db.execute(
-                text(
-                    "SELECT data_type, status, last_synced_at, record_count, error "
-                    "FROM sync_state ORDER BY data_type"
-                )
+    async def _records_for_day(
+        self,
+        user_id: int,
+        day: date,
+        timezone: ZoneInfo,
+        data_types: tuple[str, ...],
+    ) -> list[GoogleHealthRecord]:
+        local_start = datetime.combine(day, time.min, timezone)
+        utc_start = local_start.astimezone(UTC)
+        utc_end = (local_start + timedelta(days=1)).astimezone(UTC)
+        query = (
+            select(GoogleHealthRecord)
+            .join(
+                GoogleHealthConnection,
+                GoogleHealthConnection.id == GoogleHealthRecord.connection_id,
             )
-        ).mappings()
+            .where(
+                GoogleHealthConnection.user_id == user_id,
+                GoogleHealthRecord.data_type.in_(data_types),
+                GoogleHealthRecord.deleted_at.is_(None),
+                or_(
+                    GoogleHealthRecord.record_date == day,
+                    (
+                        (GoogleHealthRecord.started_at >= utc_start)
+                        & (GoogleHealthRecord.started_at < utc_end)
+                    ),
+                ),
+            )
+        )
+        return list((await self.db.scalars(query)).all())
+
+    async def _sync(self, user_id: int) -> list[dict[str, object]]:
+        query = (
+            select(GoogleHealthSyncJob)
+            .join(
+                GoogleHealthConnection,
+                GoogleHealthConnection.id == GoogleHealthSyncJob.connection_id,
+            )
+            .where(GoogleHealthConnection.user_id == user_id)
+            .order_by(GoogleHealthSyncJob.data_type)
+        )
+        rows = (await self.db.scalars(query)).all()
         return [
             {
-                "dataType": row["data_type"],
-                "status": row["status"],
-                "lastSyncedAt": _millis_iso(row["last_synced_at"]),
-                "recordCount": row["record_count"],
-                "error": row["error"],
+                "dataType": row.data_type,
+                "status": row.status,
+                "lastSyncedAt": (
+                    row.last_succeeded_at.isoformat() if row.last_succeeded_at else None
+                ),
+                "recordCount": row.record_count,
+                "error": row.error,
             }
             for row in rows
         ]
 
 
 def _metric(
-    label: str, value: float | None, unit: str, day: date, updated_at: int | None
+    label: str,
+    value: float | None,
+    unit: str,
+    day: date,
+    updated_at: datetime | None,
 ) -> dict[str, object]:
     freshness = "unknown"
     if updated_at:
-        age = datetime.now(UTC).timestamp() - updated_at / 1000
-        freshness = "stale" if age > 24 * 3600 else "fresh"
+        age = datetime.now(UTC) - updated_at.astimezone(UTC)
+        freshness = "stale" if age > timedelta(days=1) else "fresh"
     return {
         "key": label.lower(),
         "label": label,
@@ -113,7 +173,3 @@ def _metric(
         "freshness": freshness,
         "availability": "available" if value is not None else "not-synced",
     }
-
-
-def _millis_iso(value: int | None) -> str | None:
-    return datetime.fromtimestamp(value / 1000, UTC).isoformat() if value else None

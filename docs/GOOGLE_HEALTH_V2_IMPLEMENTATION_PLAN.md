@@ -60,7 +60,7 @@ Safe cutover:
 3. Verify backup restoration in an isolated PostgreSQL instance.
 4. Preserve `.env`, encryption keys, Google credentials, and old container image.
 5. Create a new database or new PostgreSQL volume.
-6. Run the complete Alembic migration chain against the empty database.
+6. Run the `20260723_0001_init` root migration against the empty database.
 7. Validate schema and application startup.
 8. Switch LifeStats to the new database.
 9. Recreate the local account and reconnect Google Health.
@@ -68,9 +68,8 @@ Safe cutover:
 11. Keep old database through an explicit rollback window.
 12. User may retire the old database manually after acceptance.
 
-Historical migrations remain immutable. New work uses additive Alembic
-migrations. A fresh database may still contain protected historical tables
-created by the migration chain; runtime ignores them.
+The repository now uses `20260723_0001_init` as its fresh-database baseline.
+Future schema changes use additive Alembic migrations after this revision.
 
 No implementation command should drop a database, volume, table, or historical
 migration.
@@ -203,10 +202,10 @@ The event hash supplies retry deduplication when Google redelivers.
 
 ## 5. Migration implementation
 
-Create additive migration:
+Create fresh root migration:
 
 ```text
-2026xxxx_0002_google_health_v2
+20260723_0001_init
 ```
 
 Migration responsibilities:
@@ -218,16 +217,14 @@ Migration responsibilities:
 5. Create `gh_records`.
 6. Create `gh_webhook_events`.
 7. Add foreign keys and indexes.
-8. Copy compatible active session/connection data when present.
-9. Leave legacy tables untouched.
-10. Provide non-destructive downgrade.
+8. Create no legacy-only tables.
+9. Perform no legacy data copy.
+10. Keep downgrade non-destructive.
 
 Migration tests:
 
 - Empty PostgreSQL database upgrades from zero to head.
-- Legacy PostgreSQL snapshot upgrades to head.
-- Existing user and health history remains unchanged.
-- Running upgrade twice is safe.
+- Offline PostgreSQL DDL compiles.
 - New foreign keys and indexes exist.
 - Downgrade does not remove health history.
 
@@ -708,7 +705,7 @@ Metrics:
 - `FOR UPDATE SKIP LOCKED` leasing.
 - Lease recovery.
 - Partial-page crash recovery.
-- Empty and legacy migrations.
+- Fresh root migration.
 - Initial 39-type state seeding.
 - OAuth partial consent.
 - Webhook handshake.
@@ -736,7 +733,7 @@ Metrics:
 1. Complete all quality gates.
 2. Build Docker images.
 3. Test empty PostgreSQL migration.
-4. Test legacy PostgreSQL migration.
+4. Compile and inspect fresh-init PostgreSQL DDL.
 5. Verify Redis persistence and health.
 6. Verify Google Cloud scopes.
 7. Verify webhook service account and IAM.
@@ -760,7 +757,7 @@ Sequence:
 9. Verify `/healthz` and OpenAPI.
 10. Complete private account setup.
 11. Connect Google Health and grant desired scopes.
-12. Verify 39 sync-state rows or covered fetch-state set.
+12. Verify 39 `gh_sync_job` rows or covered fetch-method set.
 13. Start worker.
 14. Trigger initial sync.
 15. Observe initial priority types.
@@ -836,7 +833,7 @@ Production-only:
 - Add migration tests.
 - No polling cutover yet.
 
-Exit: empty/legacy migrations pass.
+Exit: fresh root migration compiles and model/schema tests pass.
 
 ### Milestone 2: generic all-type ingestion
 

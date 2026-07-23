@@ -11,7 +11,7 @@ from src.core.config import Settings
 from src.core.errors import AuthenticationError, ConflictError, NotFoundError
 from src.core.security import hash_password, verify_password
 from src.core.time import utc_now
-from src.modules.auth.models import AdminAccount, AppSession, User
+from src.modules.auth.models import Session, User
 
 
 @dataclass(frozen=True)
@@ -27,7 +27,7 @@ class AuthService:
         self.settings = settings
 
     async def setup(self, supplied_token: str, email: str, password: str) -> IssuedSession:
-        count = await self.db.scalar(select(func.count()).select_from(AdminAccount))
+        count = await self.db.scalar(select(func.count()).select_from(User))
         if count:
             raise NotFoundError("Setup unavailable")
         if not self.settings.setup_token or not secrets.compare_digest(
@@ -43,19 +43,13 @@ class AuthService:
             user.password = hash_password(password)
         try:
             await self.db.flush()
-            self.db.add(AdminAccount(id=1, user_id=user.id))
-            await self.db.flush()
         except IntegrityError as exc:
             await self.db.rollback()
             raise ConflictError("Setup already completed") from exc
         return await self._issue(user)
 
     async def login(self, email: str, password: str) -> IssuedSession:
-        user = await self.db.scalar(
-            select(User)
-            .join(AdminAccount, AdminAccount.user_id == User.id)
-            .where(User.email == email.lower().strip())
-        )
+        user = await self.db.scalar(select(User).where(User.email == email.lower().strip()))
         if user is None or not verify_password(password, user.password):
             raise AuthenticationError("Invalid email or password")
         return await self._issue(user)
@@ -63,9 +57,7 @@ class AuthService:
     async def logout(self, token: str | None) -> None:
         if token:
             row = await self.db.scalar(
-                select(AppSession).where(
-                    AppSession.token_hash == sha256(token.encode()).hexdigest()
-                )
+                select(Session).where(Session.token_hash == sha256(token.encode()).hexdigest())
             )
             if row:
                 await self.db.delete(row)
@@ -74,7 +66,7 @@ class AuthService:
     async def _issue(self, user: User) -> IssuedSession:
         token = secrets.token_urlsafe(48)
         csrf = secrets.token_urlsafe(32)
-        row = AppSession(
+        row = Session(
             user_id=user.id,
             token_hash=sha256(token.encode()).hexdigest(),
             csrf_token_hash=sha256(csrf.encode()).hexdigest(),

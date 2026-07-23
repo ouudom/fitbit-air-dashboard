@@ -10,6 +10,7 @@ dependencies = [
   "cryptography>=45,<47",
   "email-validator>=2.2,<3",
   "fastapi>=0.116,<1",
+  "google-auth[requests]>=2.40,<3",
   "httpx>=0.28,<1",
   "pwdlib[argon2]>=0.2,<1",
   "pydantic-settings>=2.10,<3",
@@ -19,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 app = "src.main:run"
+google-health-subscriber = "src.modules.google_health.subscriber_cli:run"
 
 [project.optional-dependencies]
 dev = [

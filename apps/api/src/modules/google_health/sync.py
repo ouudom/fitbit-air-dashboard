@@ -1,261 +1,429 @@
-import json
-from datetime import date, datetime, timedelta
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from uuid import UUID
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import text
+from sqlalchemy import and_, or_, select, true, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import Settings
 from src.core.time import utc_now
+from src.modules.auth.models import User
 from src.modules.google_health.client import GoogleHealthClient
-from src.modules.google_health.types import SYNC_TYPES
+from src.modules.google_health.models import (
+    GoogleHealthConnection,
+    GoogleHealthRecord,
+    GoogleHealthSyncJob,
+)
+from src.modules.google_health.normalization import normalize_record
+from src.modules.google_health.scheduling import (
+    daily_noon_retry,
+    is_quiet_hour,
+    next_allowed_poll,
+    next_failure_poll,
+    next_regular_poll,
+    sync_range,
+)
+from src.modules.google_health.types import (
+    DATA_TYPE_REGISTRY,
+    DATA_TYPES,
+    DataType,
+    FetchMethod,
+    PollingTier,
+)
+
+LEASE_DURATION = timedelta(minutes=15)
+SOFT_DELETE_RETENTION = timedelta(days=30)
+
+
+@dataclass(frozen=True, slots=True)
+class SyncOutcome:
+    data_type: str
+    record_count: int
+    status: str
+
+
+def scope_granted(scopes: list[str], required_scope: str) -> bool:
+    normalized = {scope.rsplit("/", 1)[-1] for scope in scopes}
+    return required_scope in normalized
+
+
+async def seed_sync_jobs(
+    db: AsyncSession,
+    connection: GoogleHealthConnection,
+    *,
+    now: datetime | None = None,
+) -> None:
+    scheduled_at = (now or utc_now()).astimezone(UTC)
+    for data_type in DATA_TYPES:
+        enabled = scope_granted(connection.scopes, data_type.scope)
+        statement = (
+            insert(GoogleHealthSyncJob)
+            .values(
+                connection_id=connection.id,
+                data_type=data_type.endpoint_id,
+                fetch_method=data_type.fetch_method.value,
+                enabled=enabled,
+                poll_interval_minutes=data_type.poll_interval_minutes,
+                initial_lookback_days=data_type.initial_lookback_days,
+                incremental_overlap_minutes=data_type.incremental_overlap_minutes,
+                page_size=data_type.page_size,
+                priority=data_type.priority,
+                next_poll_at=scheduled_at,
+                status="queued",
+                error=None if enabled else "scope_not_granted",
+            )
+            .on_conflict_do_nothing()
+        )
+        await db.execute(statement)
+        scope_filter = (
+            GoogleHealthSyncJob.connection_id == connection.id,
+            GoogleHealthSyncJob.data_type == data_type.endpoint_id,
+            GoogleHealthSyncJob.fetch_method == data_type.fetch_method.value,
+        )
+        if enabled:
+            await db.execute(
+                update(GoogleHealthSyncJob)
+                .where(*scope_filter, GoogleHealthSyncJob.error == "scope_not_granted")
+                .values(enabled=True, error=None)
+            )
+        else:
+            await db.execute(
+                update(GoogleHealthSyncJob)
+                .where(*scope_filter)
+                .values(enabled=False, error="scope_not_granted")
+            )
+    await db.commit()
+
+
+async def claim_due_jobs(
+    db: AsyncSession,
+    *,
+    now: datetime | None = None,
+    limit: int = 20,
+) -> list[tuple[UUID, str]]:
+    claimed_at = (now or utc_now()).astimezone(UTC)
+    query = (
+        select(GoogleHealthSyncJob, User.timezone)
+        .join(
+            GoogleHealthConnection,
+            GoogleHealthConnection.id == GoogleHealthSyncJob.connection_id,
+        )
+        .join(User, User.id == GoogleHealthConnection.user_id)
+        .where(
+            GoogleHealthSyncJob.enabled.is_(True),
+            GoogleHealthConnection.status == "active",
+            GoogleHealthSyncJob.next_poll_at <= claimed_at,
+            or_(
+                GoogleHealthSyncJob.lease_until.is_(None),
+                GoogleHealthSyncJob.lease_until < claimed_at,
+            ),
+        )
+        .order_by(GoogleHealthSyncJob.priority, GoogleHealthSyncJob.next_poll_at)
+        .limit(limit)
+        .with_for_update(of=GoogleHealthSyncJob, skip_locked=True)
+    )
+    rows = (await db.execute(query)).all()
+    claimed: list[tuple[UUID, str]] = []
+    for job, timezone in rows:
+        if is_quiet_hour(claimed_at, timezone):
+            job.next_poll_at = next_allowed_poll(claimed_at, timezone)
+            job.lease_until = None
+            continue
+        job.status = "queued"
+        job.lease_until = claimed_at + LEASE_DURATION
+        claimed.append((job.connection_id, job.data_type))
+    await db.commit()
+    return claimed
 
 
 class SyncService:
-    def __init__(self, db: AsyncSession, settings: Settings, user_id: int) -> None:
+    def __init__(self, db: AsyncSession, settings: Settings, connection_id: UUID) -> None:
         self.db = db
         self.settings = settings
-        self.user_id = user_id
+        self.connection_id = connection_id
 
-    async def run(
-        self, days: int = 30, data_types: tuple[str, ...] = SYNC_TYPES
-    ) -> dict[str, object]:
-        end = datetime.now(self.settings.timezone).date()
-        start = end - timedelta(days=days - 1)
-        client = GoogleHealthClient(self.db, self.settings, self.user_id)
-        counts: dict[str, int] = {}
-        errors: dict[str, str] = {}
+    async def sync_type(
+        self,
+        data_type_id: str,
+        *,
+        trigger: str = "scheduled",
+        requested_start: datetime | None = None,
+        requested_end: datetime | None = None,
+    ) -> SyncOutcome:
+        data_type = DATA_TYPE_REGISTRY.get(data_type_id)
+        if data_type is None:
+            raise ValueError(f"Unsupported Google Health data type: {data_type_id}")
+        connection = await self.db.get(GoogleHealthConnection, self.connection_id)
+        if connection is None:
+            raise RuntimeError("Google Health connection not found")
+        if connection.status != "active":
+            raise RuntimeError("Google Health connection is not active")
+        await seed_sync_jobs(self.db, connection)
+        key = (self.connection_id, data_type.endpoint_id, data_type.fetch_method.value)
+        job = await self.db.scalar(
+            select(GoogleHealthSyncJob)
+            .where(
+                GoogleHealthSyncJob.connection_id == self.connection_id,
+                GoogleHealthSyncJob.data_type == data_type.endpoint_id,
+                GoogleHealthSyncJob.fetch_method == data_type.fetch_method.value,
+            )
+            .with_for_update()
+        )
+        if job is None:
+            raise RuntimeError("Google Health sync job was not seeded")
+        if not job.enabled:
+            return SyncOutcome(data_type.endpoint_id, 0, "disabled")
+        now = utc_now()
+        if job.status == "running" and job.lease_until and job.lease_until > now:
+            return SyncOutcome(data_type.endpoint_id, 0, "leased")
+        job.status = "running"
+        job.lease_until = now + LEASE_DURATION
+        await self.db.commit()
+
+        timezone = await self.db.scalar(
+            select(User.timezone)
+            .join(GoogleHealthConnection, GoogleHealthConnection.user_id == User.id)
+            .where(GoogleHealthConnection.id == self.connection_id)
+        )
+        if not timezone:
+            timezone = self.settings.app_timezone
+        if trigger == "scheduled" and is_quiet_hour(now, timezone):
+            job.next_poll_at = next_allowed_poll(now, timezone)
+            job.lease_until = None
+            await self.db.commit()
+            return SyncOutcome(data_type.endpoint_id, 0, "deferred")
+
+        if job.next_page_token and job.range_start and job.range_end:
+            range_start, range_end = job.range_start, job.range_end
+        else:
+            range_start, desired_end = sync_range(
+                now,
+                initial_lookback_days=job.initial_lookback_days,
+                incremental_overlap_minutes=job.incremental_overlap_minutes,
+                last_succeeded_at=job.last_succeeded_at,
+                requested_start=requested_start,
+                requested_end=requested_end,
+            )
+            range_end = min(
+                desired_end,
+                range_start + timedelta(days=data_type.maximum_range_days - 1),
+            )
+
+        client: GoogleHealthClient | None = None
         try:
-            for data_type in data_types:
-                await self._state(data_type, "running")
-                try:
-                    if data_type in {"steps", "active-minutes"}:
-                        points = await client.daily_rollup(data_type, start, end)
-                        await self._save_daily_metrics(data_type, points, start, end)
-                    else:
-                        points = await client.reconcile_points(data_type, start, end)
-                        if data_type == "exercise":
-                            await self._save_exercises(points, start, end)
-                        else:
-                            await self._save_health_records(data_type, points, start, end)
-                    counts[data_type] = len(points)
-                    await self._state(data_type, "complete", len(points))
-                except Exception as exc:
-                    await self.db.rollback()
-                    errors[data_type] = str(exc)
-                    await self._state(data_type, "error", error=str(exc))
+            client = GoogleHealthClient(self.db, self.settings, connection.user_id)
+            count = await self._sync_window(client, job, data_type, range_start, range_end)
+        except Exception as exc:
+            await self.db.rollback()
+            job = await self.db.get(GoogleHealthSyncJob, key)
+            if job is not None:
+                job.status = "failed"
+                job.error = str(exc)
+                job.lease_until = None
+                job.consecutive_failures += 1
+                job.next_poll_at = next_failure_poll(utc_now(), job.consecutive_failures, timezone)
+                await self.db.commit()
+            raise
         finally:
-            await client.close()
-        await self.db.execute(
-            text(
-                "INSERT INTO meta (key, value) VALUES ('lastSync', :value) "
-                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value"
-            ),
-            {"value": str(int(utc_now().timestamp() * 1000))},
+            if client is not None:
+                await client.close()
+
+        caught_up = range_end >= (requested_end or now) - timedelta(seconds=1)
+        job.status = "completed"
+        job.error = None
+        job.lease_until = None
+        job.consecutive_failures = 0
+        job.record_count = count
+        job.last_succeeded_at = range_end
+        job.range_start = None
+        job.range_end = None
+        job.next_page_token = None
+        noon_retry = (
+            daily_noon_retry(now, timezone)
+            if caught_up and count == 0 and data_type.polling_tier is PollingTier.DAILY
+            else None
+        )
+        job.next_poll_at = noon_retry or (
+            next_regular_poll(now, data_type, timezone) if caught_up else utc_now()
         )
         await self.db.commit()
-        return {"counts": counts, "errors": errors}
+        return SyncOutcome(data_type.endpoint_id, count, "completed")
 
-    async def _save_daily_metrics(
-        self, data_type: str, points: list[dict[str, Any]], start: date, end: date
-    ) -> None:
-        await self.db.execute(
-            text(
-                "DELETE FROM daily_metrics WHERE metric=:metric AND date >= :start AND date <= :end"
-            ),
-            {"metric": data_type, "start": start.isoformat(), "end": end.isoformat()},
-        )
-        for point in points:
-            observed = _point_date(point)
-            value = _number(_inner(point))
-            if observed and value is not None:
-                await self.db.execute(
-                    text(
-                        "INSERT INTO daily_metrics (date, metric, value, updated_at) "
-                        "VALUES (:date, :metric, :value, :updated_at) "
-                        "ON CONFLICT (date, metric) DO UPDATE SET value = EXCLUDED.value, "
-                        "updated_at = EXCLUDED.updated_at"
-                    ),
-                    {
-                        "date": observed,
-                        "metric": data_type,
-                        "value": value,
-                        "updated_at": int(utc_now().timestamp() * 1000),
-                    },
-                )
+    async def _sync_window(
+        self,
+        client: GoogleHealthClient,
+        job: GoogleHealthSyncJob,
+        data_type: DataType,
+        range_start: datetime,
+        range_end: datetime,
+    ) -> int:
+        resumed = bool(job.next_page_token and job.range_start and job.range_end)
+        run_started = job.last_attempted_at if resumed else utc_now()
+        if run_started is None:
+            run_started = utc_now()
+        job.status = "running"
+        job.range_start = range_start
+        job.range_end = range_end
+        job.last_attempted_at = run_started
+        job.lease_until = utc_now() + LEASE_DURATION
         await self.db.commit()
 
-    async def _save_health_records(
-        self, data_type: str, points: list[dict[str, Any]], start: date, end: date
+        timezone = await self.db.scalar(
+            select(User.timezone)
+            .join(GoogleHealthConnection, GoogleHealthConnection.user_id == User.id)
+            .where(GoogleHealthConnection.id == self.connection_id)
+        )
+        zone = timezone or self.settings.app_timezone
+        start_date = range_start.astimezone(ZoneInfo(zone)).date()
+        end_date = range_end.astimezone(ZoneInfo(zone)).date()
+        count = 0
+        async for points, next_page_token in client.point_pages(
+            data_type,
+            start_date,
+            end_date,
+            page_token=job.next_page_token,
+        ):
+            for point in points:
+                await self._upsert(data_type, point, utc_now())
+                count += 1
+            job.next_page_token = next_page_token
+            job.lease_until = utc_now() + LEASE_DURATION
+            await self.db.commit()
+
+        await self._soft_delete_missing(
+            data_type,
+            range_start,
+            range_end,
+            start_date,
+            end_date,
+            run_started,
+        )
+        await self.db.commit()
+        return count
+
+    async def _upsert(
+        self,
+        data_type: DataType,
+        point: dict[str, Any],
+        synced_at: datetime,
     ) -> None:
-        fetched_ids = [f"{data_type}:{_point_name(point)}" for point in points]
-        await self.db.execute(
-            text(
-                "DELETE FROM health_records WHERE data_type=:type "
-                "AND date >= :start AND date <= :end "
-                "AND id != ALL(CAST(:ids AS text[]))"
-            ),
-            {
-                "type": data_type,
-                "start": start.isoformat(),
-                "end": end.isoformat(),
-                "ids": fetched_ids,
+        normalized = normalize_record(data_type, point)
+        record_type = (
+            "rollup" if data_type.fetch_method is FetchMethod.DAILY_ROLLUP else "data_point"
+        )
+        statement = insert(GoogleHealthRecord).values(
+            connection_id=self.connection_id,
+            data_type=data_type.endpoint_id,
+            record_type=record_type,
+            fetch_method=data_type.fetch_method.value,
+            provider_name=normalized.provider_name,
+            identity_hash=normalized.identity_hash,
+            payload_hash=normalized.payload_hash,
+            record_date=normalized.record_date,
+            started_at=normalized.started_at,
+            ended_at=normalized.ended_at,
+            source_family=normalized.source_family,
+            raw_payload=normalized.raw_payload,
+            provider_updated_at=normalized.provider_updated_at,
+            first_synced_at=synced_at,
+            last_synced_at=synced_at,
+            deleted_at=None,
+        )
+        excluded = statement.excluded
+        statement = statement.on_conflict_do_update(
+            constraint="uq_gh_records_identity",
+            set_={
+                "provider_name": excluded.provider_name,
+                "payload_hash": excluded.payload_hash,
+                "record_date": excluded.record_date,
+                "started_at": excluded.started_at,
+                "ended_at": excluded.ended_at,
+                "source_family": excluded.source_family,
+                "raw_payload": excluded.raw_payload,
+                "provider_updated_at": excluded.provider_updated_at,
+                "last_synced_at": synced_at,
+                "deleted_at": None,
             },
         )
-        for point in points:
-            inner = _inner(point)
-            record_start = _first(
-                inner, "interval.startTime", "sampleTime.physicalTime", "startTime"
-            )
-            record_end = _first(inner, "interval.endTime", "endTime")
-            observed = _point_date(point)
-            name = _point_name(point)
-            await self.db.execute(
-                text(
-                    "INSERT INTO health_records "
-                    "(id, data_type, start_time, end_time, date, numeric_value, "
-                    "payload, updated_at) "
-                    "VALUES (:id, :type, :start, :end, :date, :value, "
-                    "CAST(:payload AS jsonb), :updated) "
-                    "ON CONFLICT (id) DO UPDATE SET data_type = EXCLUDED.data_type, "
-                    "start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time, "
-                    "date = EXCLUDED.date, numeric_value = EXCLUDED.numeric_value, "
-                    "payload = EXCLUDED.payload, updated_at = EXCLUDED.updated_at"
-                ),
-                {
-                    "id": f"{data_type}:{name}",
-                    "type": data_type,
-                    "start": record_start,
-                    "end": record_end,
-                    "date": observed,
-                    "value": _number(inner),
-                    "payload": json.dumps(point),
-                    "updated": int(utc_now().timestamp() * 1000),
-                },
-            )
-        await self.db.commit()
+        await self.db.execute(statement)
 
-    async def _save_exercises(self, points: list[dict[str, Any]], start: date, end: date) -> None:
-        fetched_ids = [_point_name(point).rsplit("/", 1)[-1] for point in points]
-        await self.db.execute(
-            text(
-                "DELETE FROM exercises WHERE LEFT(start_time, 10) >= :start "
-                "AND LEFT(start_time, 10) <= :end "
-                "AND id != ALL(CAST(:ids AS text[]))"
-            ),
-            {"start": start.isoformat(), "end": end.isoformat(), "ids": fetched_ids},
-        )
-        for point in points:
-            exercise = point.get("exercise", {})
-            metrics = exercise.get("metricsSummary", {})
-            name = _point_name(point)
-            await self.db.execute(
-                text(
-                    "INSERT INTO exercises "
-                    "(id, type, display_name, start_time, duration_s, calories, distance_mm, "
-                    "steps, avg_hr, raw, updated_at) VALUES "
-                    "(:id, :type, :display, :start, :duration, :calories, :distance, :steps, :hr, "
-                    "CAST(:raw AS jsonb), :updated) ON CONFLICT (id) DO UPDATE SET "
-                    "type=EXCLUDED.type, display_name=EXCLUDED.display_name, "
-                    "start_time=EXCLUDED.start_time, duration_s=EXCLUDED.duration_s, "
-                    "calories=EXCLUDED.calories, distance_mm=EXCLUDED.distance_mm, "
-                    "steps=EXCLUDED.steps, avg_hr=EXCLUDED.avg_hr, raw=EXCLUDED.raw, "
-                    "updated_at=EXCLUDED.updated_at"
-                ),
-                {
-                    "id": name.rsplit("/", 1)[-1],
-                    "type": exercise.get("exerciseType"),
-                    "display": exercise.get("displayName"),
-                    "start": _first(exercise, "interval.startTime"),
-                    "duration": _duration(exercise.get("activeDuration")),
-                    "calories": _number(metrics.get("caloriesKcal")),
-                    "distance": _number(
-                        metrics.get("distanceMillimeters", metrics.get("distanceMillimiters"))
-                    ),
-                    "steps": _integer(metrics.get("steps")),
-                    "hr": _integer(metrics.get("averageHeartRateBeatsPerMinute")),
-                    "raw": json.dumps(point),
-                    "updated": int(utc_now().timestamp() * 1000),
-                },
-            )
-        await self.db.commit()
-
-    async def _state(
-        self, data_type: str, status: str, count: int = 0, error: str | None = None
+    async def _soft_delete_missing(
+        self,
+        data_type: DataType,
+        range_start: datetime,
+        range_end: datetime,
+        start_date: date,
+        end_date: date,
+        run_started: datetime,
     ) -> None:
-        now = int(utc_now().timestamp() * 1000)
-        await self.db.execute(
-            text(
-                "INSERT INTO sync_state "
-                "(data_type, last_synced_at, status, record_count, error, updated_at) "
-                "VALUES (:type, :last, :status, :count, :error, :updated) "
-                "ON CONFLICT (data_type) DO UPDATE SET "
-                "last_synced_at = CASE WHEN EXCLUDED.status = 'complete' "
-                "THEN EXCLUDED.last_synced_at ELSE sync_state.last_synced_at END, "
-                "status=EXCLUDED.status, record_count=EXCLUDED.record_count, "
-                "error=EXCLUDED.error, updated_at=EXCLUDED.updated_at"
+        in_window = or_(
+            and_(
+                GoogleHealthRecord.record_date >= start_date,
+                GoogleHealthRecord.record_date <= end_date,
             ),
-            {
-                "type": data_type,
-                "last": now if status == "complete" else None,
-                "status": status,
-                "count": count,
-                "error": error,
-                "updated": now,
-            },
+            and_(
+                GoogleHealthRecord.started_at >= range_start,
+                GoogleHealthRecord.started_at <= range_end,
+            ),
         )
-        await self.db.commit()
+        if data_type.filter_field is None:
+            in_window = true()
+        statement = (
+            update(GoogleHealthRecord)
+            .where(
+                GoogleHealthRecord.connection_id == self.connection_id,
+                GoogleHealthRecord.data_type == data_type.endpoint_id,
+                GoogleHealthRecord.fetch_method == data_type.fetch_method.value,
+                GoogleHealthRecord.last_synced_at < run_started,
+                GoogleHealthRecord.deleted_at.is_(None),
+                in_window,
+            )
+            .values(deleted_at=utc_now())
+        )
+        await self.db.execute(statement)
 
 
+async def purge_soft_deleted_records(
+    db: AsyncSession,
+    *,
+    now: datetime | None = None,
+) -> int:
+    from sqlalchemy import delete
+
+    cutoff = (now or utc_now()) - SOFT_DELETE_RETENTION
+    result = await db.execute(
+        delete(GoogleHealthRecord).where(GoogleHealthRecord.deleted_at < cutoff)
+    )
+    await db.commit()
+    return int(result.rowcount or 0)  # type: ignore[attr-defined]
+
+
+# Small mapping helpers remain public for existing response-mapping tests.
 def _inner(point: dict[str, Any]) -> dict[str, Any]:
-    wrappers = {
-        "sleep",
-        "exercise",
-        "nutritionLog",
-        "hydrationLog",
-        "weight",
-        "dailyHeartRateVariability",
-        "dailyRestingHeartRate",
-        "heartRate",
-    }
-    for key, value in point.items():
-        if key in wrappers and isinstance(value, dict):
+    for data_type in DATA_TYPES:
+        value = point.get(data_type.payload_field)
+        if isinstance(value, dict):
             return value
     return point
 
 
-def _point_name(point: dict[str, Any]) -> str:
-    explicit = point.get("dataPointName") or point.get("name")
-    if explicit:
-        return str(explicit)
-    return json.dumps(point, sort_keys=True, separators=(",", ":"))
-
-
-def _first(data: dict[str, Any], *paths: str) -> str | None:
-    for path in paths:
-        value: Any = data
-        for part in path.split("."):
-            value = value.get(part) if isinstance(value, dict) else None
-        if isinstance(value, str):
-            return value
-    return None
-
-
 def _point_date(point: dict[str, Any]) -> str | None:
     inner = _inner(point)
-    candidates: list[Any] = [
+    for value in (
         inner.get("date"),
         _nested(inner, "civilStartTime.date"),
         _nested(inner, "interval.civilStartTime.date"),
         _nested(inner, "sampleTime.civilTime.date"),
-    ]
-    for value in candidates:
+        _nested(point, "civilStartTime.date"),
+    ):
         if isinstance(value, dict) and all(key in value for key in ("year", "month", "day")):
             return f"{value['year']:04d}-{value['month']:02d}-{value['day']:02d}"
         if isinstance(value, str):
             return value[:10]
-    physical = _first(inner, "interval.startTime", "sampleTime.physicalTime", "startTime")
-    return physical[:10] if physical else None
+    return None
 
 
 def _nested(data: dict[str, Any], path: str) -> Any:
@@ -274,7 +442,7 @@ def _number(value: Any) -> float | None:
         except ValueError:
             return None
     if isinstance(value, dict):
-        preferred = (
+        for key in (
             "countSum",
             "sum",
             "total",
@@ -287,8 +455,7 @@ def _number(value: Any) -> float | None:
             "kilograms",
             "averageHeartRateVariabilityMilliseconds",
             "dailyAverageHeartRateVariabilityMilliseconds",
-        )
-        for key in preferred:
+        ):
             if key in value and (number := _number(value[key])) is not None:
                 return number
         ignored = {
@@ -307,24 +474,6 @@ def _number(value: Any) -> float | None:
             "interval",
         }
         for key, nested in value.items():
-            if key in ignored:
-                continue
-            if (number := _number(nested)) is not None:
+            if key not in ignored and (number := _number(nested)) is not None:
                 return number
-    return None
-
-
-def _integer(value: Any) -> int | None:
-    number = _number(value)
-    return round(number) if number is not None else None
-
-
-def _duration(value: Any) -> int | None:
-    if isinstance(value, (int, float)):
-        return round(value)
-    if isinstance(value, str) and value.endswith("s"):
-        try:
-            return round(float(value[:-1]))
-        except ValueError:
-            return None
     return None

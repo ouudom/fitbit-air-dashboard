@@ -20,11 +20,28 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     redirect_uri: str = "http://localhost:3000/api/v1/oauth/google-health/callback"
     scopes: str = Field(
-        default="https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly"
+        default=(
+            "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly "
+            "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly "
+            "https://www.googleapis.com/auth/googlehealth.nutrition.readonly "
+            "https://www.googleapis.com/auth/googlehealth.sleep.readonly "
+            "https://www.googleapis.com/auth/googlehealth.ecg.readonly "
+            "https://www.googleapis.com/auth/googlehealth.irn.readonly "
+            "https://www.googleapis.com/auth/googlehealth.location.readonly"
+        )
     )
     google_health_url: str = "https://health.googleapis.com/v4"
     google_auth_url: str = "https://accounts.google.com/o/oauth2/v2/auth"
     google_token_url: str = "https://oauth2.googleapis.com/token"
+    google_cloud_project_number: str = ""
+    google_health_subscriber_id: str = ""
+    google_health_webhook_url: str = ""
+    google_health_webhook_auth_secret: str = ""
+    google_health_webhook_enabled: bool = False
+    google_health_webhook_keyset_url: str = (
+        "https://www.gstatic.com/googlehealthapi/webhooks/webhooks_public_keyset.json"
+    )
+    google_health_webhook_keyset_ttl_seconds: int = 3600
 
     @field_validator("database_url")
     @classmethod
