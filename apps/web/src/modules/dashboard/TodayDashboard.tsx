@@ -4,22 +4,35 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import type { Dashboard } from "@/lib/types";
-import { BatcaveOverview } from "./views/BatcaveOverview";
 import { DashboardShell, type DashboardView } from "./layout/DashboardShell";
-import { StasisArchitecture } from "./views/StasisArchitecture";
+import { SleepOverview } from "./views/SleepOverview";
+import { TodayOverview } from "./views/TodayOverview";
 
-const today = () => new Date().toLocaleDateString("en-CA");
+type IntegrationStatus = {
+  connected: boolean;
+  status: string;
+};
 
 export function TodayDashboard({ email, view }: { email: string; view: DashboardView }) {
   const client = useQueryClient();
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState<string>();
   const dashboard = useQuery({
-    queryKey: ["dashboard", date],
-    queryFn: () => api<Dashboard>(`/dashboard?date=${date}`),
+    queryKey: ["dashboard", date ?? "current"],
+    queryFn: () => api<Dashboard>(date ? `/dashboard?date=${date}` : "/dashboard"),
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      return data?.sync.some((item) => item.status === "queued" || item.status === "running")
+        ? 5_000
+        : false;
+    },
+  });
+  const integration = useQuery({
+    queryKey: ["google-health-integration"],
+    queryFn: () => api<IntegrationStatus>("/integrations/google-health"),
   });
   const sync = useMutation({
     mutationFn: () =>
-      api<{ jobId: string }>("/sync", {
+      api<{ status: string; dataTypes: string[] }>("/sync", {
         method: "POST",
         body: JSON.stringify({ days: 30 }),
       }),
@@ -34,12 +47,16 @@ export function TodayDashboard({ email, view }: { email: string; view: Dashboard
   });
 
   const data = dashboard.data;
+  const selectedDate = date ?? data?.date ?? "";
+  const syncRunning = data?.sync.some(
+    (item) => item.status === "queued" || item.status === "running",
+  );
   const lastSync = data?.sync
     .map((item) => item.lastSyncedAt)
     .filter((value): value is string => Boolean(value))
     .sort()
     .at(-1);
-  const syncLabel = sync.isPending
+  const syncLabel = sync.isPending || syncRunning
     ? "Syncing"
     : lastSync
       ? `Synced ${new Date(lastSync).toLocaleDateString([], { month: "short", day: "numeric" })}`
@@ -72,18 +89,20 @@ export function TodayDashboard({ email, view }: { email: string; view: Dashboard
       )}
 
       {data && view === "overview" && (
-        <BatcaveOverview
+        <TodayOverview
+          connected={integration.data?.connected ?? false}
+          connectionLoading={integration.isPending}
           data={data}
-          date={date}
+          date={selectedDate}
           onDateChange={setDate}
           onSync={() => sync.mutate()}
           syncError={sync.error?.message}
-          syncing={sync.isPending}
+          syncing={sync.isPending || Boolean(syncRunning)}
         />
       )}
 
       {data && view === "sleep" && (
-        <StasisArchitecture data={data} date={date} onDateChange={setDate} />
+        <SleepOverview data={data} date={selectedDate} onDateChange={setDate} />
       )}
     </DashboardShell>
   );

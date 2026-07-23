@@ -1,5 +1,12 @@
 :3000 {
     encode zstd gzip
+    header {
+        -Server
+        Referrer-Policy "same-origin"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
 
     @api path /api/* /healthz
     handle @api {

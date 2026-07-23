@@ -4,14 +4,19 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.time import utc_now
-from src.modules.google_health.models import GhWebhookEvent, GoogleHealthConnection
+from src.modules.google_health.models import (
+    GoogleHealthConnection,
+    GoogleHealthWebhookEvent,
+)
 
 
 async def process_webhook_event(db: AsyncSession, event_id: UUID) -> None:
     event = await db.scalar(
-        select(GhWebhookEvent).where(GhWebhookEvent.id == event_id).with_for_update()
+        select(GoogleHealthWebhookEvent)
+        .where(GoogleHealthWebhookEvent.id == event_id)
+        .with_for_update()
     )
-    if event is None or event.status in {"running", "completed"}:
+    if event is None or event.status == "completed":
         return
     event.status = "running"
     event.error = None

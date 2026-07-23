@@ -32,6 +32,75 @@ IRN_SCOPE = "googlehealth.irn.readonly"
 NUTRITION_SCOPE = "googlehealth.nutrition.readonly"
 SLEEP_SCOPE = "googlehealth.sleep.readonly"
 
+WEBHOOK_DATA_TYPE_IDS = (
+    "active-zone-minutes",
+    "activity-level",
+    "altitude",
+    "blood-glucose",
+    "body-fat",
+    "calories-in-heart-rate-zone",
+    "daily-heart-rate-variability",
+    "daily-heart-rate-zones",
+    "daily-oxygen-saturation",
+    "daily-respiratory-rate",
+    "daily-resting-heart-rate",
+    "daily-sleep-temperature-derivations",
+    "distance",
+    "exercise",
+    "floors",
+    "heart-rate",
+    "heart-rate-variability",
+    "height",
+    "hydration-log",
+    "nutrition-log",
+    "respiratory-rate-sleep-summary",
+    "run-vo2-max",
+    "sedentary-period",
+    "sleep",
+    "steps",
+    "time-in-heart-rate-zone",
+    "weight",
+)
+
+POLLING_DEFAULTS = {
+    PollingTier.ACTIVITY: (15, 120, 10),
+    PollingTier.RECENT_EVENT: (30, 7 * 24 * 60, 20),
+    PollingTier.MEASUREMENT: (60, 7 * 24 * 60, 30),
+    PollingTier.DAILY: (24 * 60, 14 * 24 * 60, 40),
+    PollingTier.RARE: (6 * 60, 30 * 24 * 60, 50),
+}
+
+CONSTRAINED_RANGE_TYPES = {
+    "active-minutes",
+    "calories-in-heart-rate-zone",
+    "heart-rate",
+    "total-calories",
+}
+
+AGGREGATE_TYPES = {
+    "active-energy-burned",
+    "active-minutes",
+    "active-zone-minutes",
+    "altitude",
+    "blood-glucose",
+    "body-fat",
+    "calories-in-heart-rate-zone",
+    "core-body-temperature",
+    "distance",
+    "floors",
+    "heart-rate",
+    "height",
+    "hydration-log",
+    "nutrition-log",
+    "run-vo2-max",
+    "sedentary-period",
+    "steps",
+    "swim-lengths-data",
+    "time-in-heart-rate-zone",
+    "total-calories",
+    "weight",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class DataType:
@@ -83,54 +152,13 @@ def _type(
     fetch_method: FetchMethod = FetchMethod.RECONCILE,
     tier: PollingTier = PollingTier.MEASUREMENT,
     filter_field: str | None = "",
-    webhook_supported: bool = False,
     true_zero: bool = False,
 ) -> DataType:
-    intervals = {
-        PollingTier.ACTIVITY: (15, 120, 10),
-        PollingTier.RECENT_EVENT: (30, 7 * 24 * 60, 20),
-        PollingTier.MEASUREMENT: (60, 7 * 24 * 60, 30),
-        PollingTier.DAILY: (24 * 60, 14 * 24 * 60, 40),
-        PollingTier.RARE: (6 * 60, 30 * 24 * 60, 50),
-    }
-    poll_interval, overlap, priority = intervals[tier]
+    poll_interval, overlap, priority = POLLING_DEFAULTS[tier]
     page_size = 25 if endpoint_id in {"sleep", "exercise"} else 1000
-    maximum_range_days = (
-        14
-        if endpoint_id
-        in {
-            "active-minutes",
-            "calories-in-heart-rate-zone",
-            "heart-rate",
-            "total-calories",
-        }
-        else 90
-    )
-    aggregate_types = {
-        "active-energy-burned",
-        "active-minutes",
-        "active-zone-minutes",
-        "altitude",
-        "blood-glucose",
-        "body-fat",
-        "calories-in-heart-rate-zone",
-        "core-body-temperature",
-        "distance",
-        "floors",
-        "heart-rate",
-        "height",
-        "hydration-log",
-        "nutrition-log",
-        "run-vo2-max",
-        "sedentary-period",
-        "steps",
-        "swim-lengths-data",
-        "time-in-heart-rate-zone",
-        "total-calories",
-        "weight",
-    }
+    maximum_range_days = 14 if endpoint_id in CONSTRAINED_RANGE_TYPES else 90
     supported_operations = [fetch_method.value]
-    if endpoint_id in aggregate_types:
+    if endpoint_id in AGGREGATE_TYPES:
         supported_operations.extend(["rollup", "daily_rollup"])
     if endpoint_id == "exercise":
         supported_operations.append("export_exercise_tcx")
@@ -150,7 +178,7 @@ def _type(
         initial_lookback_days=90,
         incremental_overlap_minutes=overlap,
         priority=priority,
-        webhook_supported=webhook_supported,
+        webhook_supported=endpoint_id in WEBHOOK_DATA_TYPE_IDS,
         true_zero=true_zero,
     )
 
@@ -276,7 +304,6 @@ DATA_TYPES = (
         RecordKind.SESSION,
         ACTIVITY_SCOPE,
         tier=PollingTier.RECENT_EVENT,
-        webhook_supported=True,
     ),
     _type(
         "floors",
@@ -310,7 +337,6 @@ DATA_TYPES = (
         RecordKind.SAMPLE,
         HEALTH_SCOPE,
         tier=PollingTier.ACTIVITY,
-        webhook_supported=True,
     ),
     _type(
         "heart-rate-variability",
@@ -325,7 +351,6 @@ DATA_TYPES = (
         RecordKind.SESSION,
         NUTRITION_SCOPE,
         tier=PollingTier.RECENT_EVENT,
-        webhook_supported=True,
     ),
     _type(
         "irregular-rhythm-notification",
@@ -341,7 +366,6 @@ DATA_TYPES = (
         RecordKind.SAMPLE,
         NUTRITION_SCOPE,
         tier=PollingTier.RECENT_EVENT,
-        webhook_supported=True,
     ),
     _type("oxygen-saturation", "oxygenSaturation", RecordKind.SAMPLE, HEALTH_SCOPE),
     _type(
@@ -364,7 +388,6 @@ DATA_TYPES = (
         SLEEP_SCOPE,
         tier=PollingTier.RECENT_EVENT,
         filter_field="sleep.interval.civil_end_time",
-        webhook_supported=True,
     ),
     _type(
         "steps",
@@ -372,7 +395,6 @@ DATA_TYPES = (
         RecordKind.INTERVAL,
         ACTIVITY_SCOPE,
         tier=PollingTier.ACTIVITY,
-        webhook_supported=True,
         true_zero=True,
     ),
     _type(
@@ -401,7 +423,6 @@ DATA_TYPES = (
 )
 
 DATA_TYPE_REGISTRY = {item.endpoint_id: item for item in DATA_TYPES}
-SYNC_TYPES = tuple(DATA_TYPE_REGISTRY)
 
 
 def validate_registry() -> None:
@@ -415,17 +436,7 @@ def validate_registry() -> None:
         maximum_page_size = 25 if item.endpoint_id in {"sleep", "exercise"} else 10_000
         if not 1 <= item.page_size <= maximum_page_size:
             raise ValueError(f"Invalid page size for {item.endpoint_id}")
-        expected_range = (
-            14
-            if item.endpoint_id
-            in {
-                "active-minutes",
-                "calories-in-heart-rate-zone",
-                "heart-rate",
-                "total-calories",
-            }
-            else 90
-        )
+        expected_range = 14 if item.endpoint_id in CONSTRAINED_RANGE_TYPES else 90
         if item.maximum_range_days != expected_range:
             raise ValueError(f"Invalid maximum range for {item.endpoint_id}")
 

@@ -13,7 +13,7 @@ from src.core.config import Settings
 from src.core.time import utc_now
 from src.modules.google_health.crypto import TokenCipher
 from src.modules.google_health.models import GoogleHealthConnection
-from src.modules.google_health.types import DataType, FetchMethod
+from src.modules.google_health.registry import DataType, FetchMethod
 
 MAX_REQUEST_ATTEMPTS = 5
 MAX_RETRY_DELAY_SECONDS = 60.0
@@ -50,15 +50,15 @@ class GoogleHealthClient:
 
     async def access_token(self, *, force_refresh: bool = False) -> str:
         connection = await self.connection()
-        token = self.cipher.decrypt(connection.access_token)
+        token = self.cipher.decrypt(connection.access_token_ciphertext)
         if (
             not force_refresh
             and token
-            and connection.expires_at
-            and connection.expires_at > utc_now() + timedelta(minutes=1)
+            and connection.token_expires_at
+            and connection.token_expires_at > utc_now() + timedelta(minutes=1)
         ):
             return token
-        refresh = self.cipher.decrypt(connection.refresh_token)
+        refresh = self.cipher.decrypt(connection.refresh_token_ciphertext)
         if not refresh:
             raise RuntimeError("Google Health authorization expired")
         response = await self.http.post(
@@ -77,11 +77,13 @@ class GoogleHealthClient:
             await self.db.commit()
             raise
         data = response.json()
-        connection.access_token = self.cipher.encrypt(data["access_token"]) or ""
-        connection.expires_at = utc_now() + timedelta(seconds=int(data.get("expires_in", 3600)))
+        connection.access_token_ciphertext = self.cipher.encrypt(data["access_token"]) or ""
+        connection.token_expires_at = utc_now() + timedelta(
+            seconds=int(data.get("expires_in", 3600))
+        )
         connection.status = "active"
         if data.get("refresh_token"):
-            connection.refresh_token = self.cipher.encrypt(data["refresh_token"])
+            connection.refresh_token_ciphertext = self.cipher.encrypt(data["refresh_token"])
         await self.db.commit()
         return str(data["access_token"])
 
@@ -196,71 +198,6 @@ class GoogleHealthClient:
             yield points, token
             if token is None:
                 return
-
-    async def reconcile_points(
-        self, data_type: str, start: date, end: date
-    ) -> list[dict[str, Any]]:
-        points: list[dict[str, Any]] = []
-        page: str | None = None
-        snake = data_type.replace("-", "_")
-        if data_type.startswith("daily-"):
-            field = f"{snake}.date"
-        elif data_type == "sleep":
-            field = "sleep.interval.civil_end_time"
-        elif data_type in {"exercise", "active-minutes", "hydration-log"}:
-            field = f"{snake}.interval.civil_start_time"
-        else:
-            field = f"{snake}.sample_time.civil_time"
-        while True:
-            next_day = (end + timedelta(days=1)).isoformat()
-            params: dict[str, Any] = {
-                "pageSize": 25 if data_type in {"sleep", "exercise"} else 1000,
-                "filter": f'{field} >= "{start.isoformat()}" AND {field} < "{next_day}"',
-            }
-            if page:
-                params["pageToken"] = page
-            data = await self.request(
-                "GET",
-                f"users/me/dataTypes/{data_type}/dataPoints:reconcile",
-                params=params,
-            )
-            points.extend(data.get("dataPoints", []))
-            page = data.get("nextPageToken")
-            if not page:
-                return points
-
-    async def daily_rollup(self, data_type: str, start: date, end: date) -> list[dict[str, Any]]:
-        points: list[dict[str, Any]] = []
-        cursor = start
-        while cursor <= end:
-            chunk_end = min(cursor + timedelta(days=13), end)
-            payload = {
-                "range": {
-                    "start": {"date": _date_json(cursor), "time": {}},
-                    "end": {
-                        "date": _date_json(chunk_end),
-                        "time": {"hours": 23, "minutes": 59, "seconds": 59},
-                    },
-                },
-                "windowSizeDays": 1,
-            }
-            data = await self.request(
-                "POST",
-                f"users/me/dataTypes/{data_type}/dataPoints:dailyRollUp",
-                json=payload,
-            )
-            points.extend(data.get("rollupDataPoints", []))
-            cursor = chunk_end + timedelta(days=1)
-        return points
-
-    async def wait_operation(self, operation: dict[str, Any]) -> dict[str, Any]:
-        current = operation
-        for attempt in range(8):
-            if not current.get("name") or current.get("done"):
-                return current
-            await asyncio.sleep(min(0.5 * 2**attempt, 4))
-            current = await self.request("GET", str(current["name"]))
-        raise RuntimeError("Google Health write timed out")
 
 
 def _date_json(value: date) -> dict[str, int]:

@@ -1,4 +1,4 @@
-from src.modules.google_health.sync import _number, _point_date
+from src.modules.google_health.normalization import extract_number
 
 
 def test_rollup_ignores_civil_date_numbers() -> None:
@@ -7,8 +7,7 @@ def test_rollup_ignores_civil_date_numbers() -> None:
         "civilEndTime": {"date": {"year": 2026, "month": 7, "day": 22}},
         "steps": {"countSum": "3822"},
     }
-    assert _point_date(point) == "2026-07-22"
-    assert _number(point) == 3822
+    assert extract_number(point) == 3822
 
 
 def test_daily_hrv_uses_measurement_not_date() -> None:
@@ -16,4 +15,4 @@ def test_daily_hrv_uses_measurement_not_date() -> None:
         "date": {"year": 2026, "month": 7, "day": 22},
         "dailyAverageHeartRateVariabilityMilliseconds": 47.5,
     }
-    assert _number(payload) == 47.5
+    assert extract_number(payload) == 47.5

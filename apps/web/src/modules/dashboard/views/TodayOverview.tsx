@@ -1,7 +1,9 @@
 import type { Dashboard } from "@/lib/types";
 import { MetricCard } from "../components/MetricCard";
 
-type BatcaveOverviewProps = {
+type TodayOverviewProps = {
+  connected: boolean;
+  connectionLoading: boolean;
   data: Dashboard;
   date: string;
   onDateChange: (date: string) => void;
@@ -10,15 +12,17 @@ type BatcaveOverviewProps = {
   syncing: boolean;
 };
 
-export function BatcaveOverview({
+export function TodayOverview({
+  connected,
+  connectionLoading,
   data,
   date,
   onDateChange,
   onSync,
   syncError,
   syncing,
-}: BatcaveOverviewProps) {
-  const errors = data.sync.filter((item) => item.status === "error");
+}: TodayOverviewProps) {
+  const errors = data.sync.filter((item) => item.status === "failed");
   const syncedRecords = data.sync.reduce((total, item) => total + item.recordCount, 0);
 
   return (
@@ -26,7 +30,7 @@ export function BatcaveOverview({
       <header className="pageHeader">
         <div>
           <p className="eyebrow">Private health dashboard</p>
-          <h1>Batcave Overview</h1>
+          <h1>Today</h1>
           <p>Latest source-backed signals and Google Health sync activity.</p>
         </div>
         <div className="headerActions">
@@ -39,14 +43,16 @@ export function BatcaveOverview({
               value={date}
             />
           </label>
-          <a className="secondaryButton" href="/api/v1/integrations/google-health/connect">
-            Connect Google Health
-          </a>
-          <button className="primaryButton" disabled={syncing} onClick={onSync}>
+          {!connectionLoading && !connected && (
+            <a className="secondaryButton" href="/api/v1/integrations/google-health/connect">
+              Connect Google Health
+            </a>
+          )}
+          <button className="primaryButton" disabled={syncing || !connected} onClick={onSync}>
             <span className={syncing ? "syncGlyph spinning" : "syncGlyph"} aria-hidden="true">
               ↻
             </span>
-            {syncing ? "Syncing…" : "Sync data"}
+            {syncing ? "Syncing…" : connected ? "Sync data" : "Connect to sync"}
           </button>
         </div>
       </header>
@@ -90,6 +96,7 @@ export function BatcaveOverview({
                     {new Date(item.occurredAt).toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
+                      timeZone: data.timezone,
                     })}
                   </time>
                   <div>
@@ -118,7 +125,7 @@ export function BatcaveOverview({
           </div>
           <dl className="statusList">
             <div>
-              <dt>Connected streams</dt>
+              <dt>Configured data types</dt>
               <dd>{data.sync.length}</dd>
             </div>
             <div>

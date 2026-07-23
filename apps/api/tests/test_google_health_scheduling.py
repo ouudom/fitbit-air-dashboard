@@ -1,16 +1,15 @@
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
+from src.modules.google_health.registry import DATA_TYPE_REGISTRY
 from src.modules.google_health.scheduling import (
     daily_noon_retry,
     is_quiet_hour,
     next_allowed_poll,
     next_failure_poll,
     next_regular_poll,
-    split_date_range,
     sync_range,
 )
-from src.modules.google_health.types import DATA_TYPE_REGISTRY
 
 
 def test_quiet_hours_use_user_timezone() -> None:
@@ -81,11 +80,3 @@ def test_initial_and_incremental_ranges() -> None:
         incremental_overlap_minutes=120,
         last_succeeded_at=last,
     ) == (last - timedelta(minutes=120), now)
-
-
-def test_split_date_range_is_complete_and_non_overlapping() -> None:
-    assert list(split_date_range(date(2026, 1, 1), date(2026, 2, 1), 14)) == [
-        (date(2026, 1, 1), date(2026, 1, 14)),
-        (date(2026, 1, 15), date(2026, 1, 28)),
-        (date(2026, 1, 29), date(2026, 2, 1)),
-    ]

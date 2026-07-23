@@ -4,7 +4,7 @@ import { Providers } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LifeStats — Batcave Overview",
+  title: "LifeStats — Private Health Dashboard",
   description: "Private Google Health overview and sleep dashboard",
 };
 

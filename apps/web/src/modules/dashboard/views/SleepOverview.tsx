@@ -1,6 +1,6 @@
 import type { Dashboard } from "@/lib/types";
 
-export function StasisArchitecture({
+export function SleepOverview({
   data,
   date,
   onDateChange,
@@ -17,7 +17,7 @@ export function StasisArchitecture({
       <header className="pageHeader sleepHeader">
         <div>
           <p className="eyebrow">Google Health sleep</p>
-          <h1>Stasis Architecture</h1>
+          <h1>Sleep</h1>
           <p>Sleep duration and session availability from the selected day.</p>
         </div>
         <label className="dateControl">
@@ -114,6 +114,7 @@ export function StasisArchitecture({
                       minute: "2-digit",
                       month: "short",
                       day: "numeric",
+                      timeZone: data.timezone,
                     })}
                   </time>
                   <span>{session.source}</span>

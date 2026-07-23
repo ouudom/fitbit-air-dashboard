@@ -4,7 +4,7 @@ Private, single-user Google Health companion. FastAPI owns domain behavior and i
 
 ## Runtime
 
-- Python 3.13, FastAPI, SQLAlchemy async, Alembic
+- Python 3.12+, FastAPI, SQLAlchemy async, Alembic
 - Celery and Redis for sync work
 - Next.js, React, TypeScript, TanStack Query
 - PostgreSQL 17
@@ -19,6 +19,8 @@ apps/
 │   └── src/
 │       ├── __init__.py
 │       ├── main.py
+│       ├── api/
+│       │   └── router.py
 │       ├── core/
 │       └── modules/
 │           ├── auth/
@@ -31,7 +33,13 @@ apps/
     └── modules/
 ```
 
-Backend modules are self-contained. Routers own HTTP mechanics, schemas own request/response validation, services own orchestration and business rules, and models own ORM mappings. Pure domain rules remain framework-independent. Google-specific transport stays inside its module.
+`main.py` creates the application. `api/router.py` composes module routers.
+Backend modules are self-contained. Routers own HTTP mechanics, schemas own
+request/response validation, services own orchestration and business rules,
+repositories own database queries, and models own ORM mappings. Pure domain
+rules remain framework-independent. Google-specific transport, registry, sync
+tasks, and persistence stay inside its module. Dashboard remains a first-class
+module and `/api/v1/dashboard` route.
 
 ## Source of truth
 
@@ -75,18 +83,20 @@ npm run openapi:check
 docker compose build
 ```
 
-## Safe cutover
+## Fresh database cutover
 
-Existing database contains irreplaceable health history.
+`20260723_0001_init` is a fresh PostgreSQL baseline. It does not import the old
+database.
 
-1. Stop Laravel scheduler, worker, and all writes.
-2. Take and verify PostgreSQL backup.
-3. Preserve `TOKEN_ENCRYPTION_KEY`, `APP_KEY`, Google OAuth settings, and prior image.
-4. Run `alembic upgrade head`; migration is additive and has no destructive downgrade.
-5. Create private admin. Opening Google connection imports and re-encrypts legacy tokens without changing old rows.
-6. Verify bound Google identity, projection counts, controlled sync, and timeline.
-7. Start Docker replacement. Keep old image and backup through rollback window.
-
-Historical Laravel migrations remain unchanged in `database/migrations` as immutable safety records. Laravel runtime source has been removed; rollback uses the preserved prior image and database backup.
+1. Stop existing writers.
+2. Back up and restore-test the old PostgreSQL database.
+3. Preserve encryption keys, Google OAuth settings, and prior image.
+4. Start a new `lifestats` database or volume.
+5. Run `uv run alembic upgrade head`.
+6. Create the private account and reconnect Google Health.
+7. Start worker and scheduler; verify 39 sync jobs and initial polling.
+8. Keep webhooks disabled until polling and signature tests pass.
+9. Run `google-health-subscriber inspect`, then `apply`.
+10. Keep the old database and image through the rollback window.
 
 Future contexts—Fitness, meditation, food, biology, Alfred, Telegram, and Todoist—remain documentation-only until requested.

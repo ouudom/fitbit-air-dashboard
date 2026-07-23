@@ -1,6 +1,7 @@
 # Google Health V2 implementation plan
 
-Status: approved design, implementation not started.
+Status: backend implemented locally; PostgreSQL runtime, live Google sync, deployment,
+and production webhook activation remain.
 
 Primary design references:
 
@@ -96,7 +97,7 @@ Validation:
 
 #### `sessions`
 
-Replace runtime use of `app_sessions`.
+Current runtime session table.
 
 Required behavior:
 
@@ -106,7 +107,7 @@ Required behavior:
 - Optional revocation and last-seen timestamps.
 - User agent and IP metadata.
 
-Historical `app_sessions` remains protected until rollback ends.
+Fresh initialization creates only `sessions`.
 
 ### Google Health tables
 

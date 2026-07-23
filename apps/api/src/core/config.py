@@ -1,5 +1,4 @@
 from functools import lru_cache
-from zoneinfo import ZoneInfo
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,7 +9,7 @@ class Settings(BaseSettings):
 
     app_env: str = "local"
     app_timezone: str = "Asia/Phnom_Penh"
-    database_url: str = "postgresql+asyncpg://fitbit:change-me@localhost:5432/fitbit_air"
+    database_url: str = "postgresql+asyncpg://lifestats:change-me@localhost:5432/lifestats"
     redis_url: str = "redis://localhost:6379/0"
     setup_token: str = ""
     session_lifetime_hours: int = 24 * 7
@@ -33,6 +32,7 @@ class Settings(BaseSettings):
     google_health_url: str = "https://health.googleapis.com/v4"
     google_auth_url: str = "https://accounts.google.com/o/oauth2/v2/auth"
     google_token_url: str = "https://oauth2.googleapis.com/token"
+    google_revoke_url: str = "https://oauth2.googleapis.com/revoke"
     google_cloud_project_number: str = ""
     google_health_subscriber_id: str = ""
     google_health_webhook_url: str = ""
@@ -51,10 +51,6 @@ class Settings(BaseSettings):
         if value.startswith("postgresql://"):
             return value.replace("postgresql://", "postgresql+asyncpg://", 1)
         return value
-
-    @property
-    def timezone(self) -> ZoneInfo:
-        return ZoneInfo(self.app_timezone)
 
     @property
     def secure_cookies(self) -> bool:

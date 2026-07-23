@@ -4,11 +4,11 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import Settings, get_settings
+from src.core.dependencies import database_session
 from src.core.errors import AuthenticationError, ConflictError, NotFoundError
 from src.modules.auth.dependencies import (
     Principal,
     current_principal,
-    database_session,
     require_csrf,
 )
 from src.modules.auth.schemas import Credentials, SessionResponse, SetupRequest

@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime
 
 import pytest
 from src.modules.google_health.normalization import normalize_record
-from src.modules.google_health.types import DATA_TYPE_REGISTRY
+from src.modules.google_health.registry import DATA_TYPE_REGISTRY
 
 
 def test_identifiable_point_uses_provider_name_for_identity() -> None:

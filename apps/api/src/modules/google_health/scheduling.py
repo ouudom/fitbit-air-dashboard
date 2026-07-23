@@ -1,9 +1,9 @@
 import random
-from collections.abc import Callable, Iterator
-from datetime import UTC, date, datetime, time, timedelta
+from collections.abc import Callable
+from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from src.modules.google_health.types import DataType, PollingTier
+from src.modules.google_health.registry import DataType, PollingTier
 
 QUIET_HOUR_END = 6
 FAILURE_DELAYS = (
@@ -115,15 +115,3 @@ def sync_range(
     if start >= end:
         raise ValueError("sync range start must precede end")
     return start.astimezone(UTC), end.astimezone(UTC)
-
-
-def split_date_range(start: date, end: date, maximum_days: int) -> Iterator[tuple[date, date]]:
-    if maximum_days < 1:
-        raise ValueError("maximum_days must be positive")
-    if start > end:
-        raise ValueError("start must not follow end")
-    cursor = start
-    while cursor <= end:
-        chunk_end = min(cursor + timedelta(days=maximum_days - 1), end)
-        yield cursor, chunk_end
-        cursor = chunk_end + timedelta(days=1)

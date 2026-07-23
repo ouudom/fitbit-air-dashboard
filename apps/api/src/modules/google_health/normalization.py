@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any
 
-from src.modules.google_health.types import DataType
+from src.modules.google_health.registry import DataType
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,6 +18,54 @@ class NormalizedRecord:
     source_family: str | None
     provider_updated_at: datetime | None
     raw_payload: dict[str, Any]
+
+
+def extract_number(value: Any) -> float | None:
+    """Find the first health measurement while ignoring civil date/time numbers."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float, str)):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    if not isinstance(value, dict):
+        return None
+    for key in (
+        "countSum",
+        "sum",
+        "total",
+        "average",
+        "value",
+        "bpm",
+        "beatsPerMinute",
+        "percentage",
+        "milliliters",
+        "kilograms",
+        "averageHeartRateVariabilityMilliseconds",
+        "dailyAverageHeartRateVariabilityMilliseconds",
+    ):
+        if key in value and (number := extract_number(value[key])) is not None:
+            return number
+    ignored = {
+        "date",
+        "time",
+        "year",
+        "month",
+        "day",
+        "hours",
+        "minutes",
+        "seconds",
+        "nanos",
+        "civilStartTime",
+        "civilEndTime",
+        "sampleTime",
+        "interval",
+    }
+    for key, nested in value.items():
+        if key not in ignored and (number := extract_number(nested)) is not None:
+            return number
+    return None
 
 
 def normalize_record(data_type: DataType, item: dict[str, Any]) -> NormalizedRecord:

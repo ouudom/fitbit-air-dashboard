@@ -18,6 +18,13 @@ from src.modules.google_health.models import (
     GoogleHealthSyncJob,
 )
 from src.modules.google_health.normalization import normalize_record
+from src.modules.google_health.registry import (
+    DATA_TYPE_REGISTRY,
+    DATA_TYPES,
+    DataType,
+    FetchMethod,
+    PollingTier,
+)
 from src.modules.google_health.scheduling import (
     daily_noon_retry,
     is_quiet_hour,
@@ -25,13 +32,6 @@ from src.modules.google_health.scheduling import (
     next_failure_poll,
     next_regular_poll,
     sync_range,
-)
-from src.modules.google_health.types import (
-    DATA_TYPE_REGISTRY,
-    DATA_TYPES,
-    DataType,
-    FetchMethod,
-    PollingTier,
 )
 
 LEASE_DURATION = timedelta(minutes=15)
@@ -399,81 +399,3 @@ async def purge_soft_deleted_records(
     )
     await db.commit()
     return int(result.rowcount or 0)  # type: ignore[attr-defined]
-
-
-# Small mapping helpers remain public for existing response-mapping tests.
-def _inner(point: dict[str, Any]) -> dict[str, Any]:
-    for data_type in DATA_TYPES:
-        value = point.get(data_type.payload_field)
-        if isinstance(value, dict):
-            return value
-    return point
-
-
-def _point_date(point: dict[str, Any]) -> str | None:
-    inner = _inner(point)
-    for value in (
-        inner.get("date"),
-        _nested(inner, "civilStartTime.date"),
-        _nested(inner, "interval.civilStartTime.date"),
-        _nested(inner, "sampleTime.civilTime.date"),
-        _nested(point, "civilStartTime.date"),
-    ):
-        if isinstance(value, dict) and all(key in value for key in ("year", "month", "day")):
-            return f"{value['year']:04d}-{value['month']:02d}-{value['day']:02d}"
-        if isinstance(value, str):
-            return value[:10]
-    return None
-
-
-def _nested(data: dict[str, Any], path: str) -> Any:
-    value: Any = data
-    for part in path.split("."):
-        value = value.get(part) if isinstance(value, dict) else None
-    return value
-
-
-def _number(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float, str)):
-        try:
-            return float(value)
-        except ValueError:
-            return None
-    if isinstance(value, dict):
-        for key in (
-            "countSum",
-            "sum",
-            "total",
-            "average",
-            "value",
-            "bpm",
-            "beatsPerMinute",
-            "percentage",
-            "milliliters",
-            "kilograms",
-            "averageHeartRateVariabilityMilliseconds",
-            "dailyAverageHeartRateVariabilityMilliseconds",
-        ):
-            if key in value and (number := _number(value[key])) is not None:
-                return number
-        ignored = {
-            "date",
-            "time",
-            "year",
-            "month",
-            "day",
-            "hours",
-            "minutes",
-            "seconds",
-            "nanos",
-            "civilStartTime",
-            "civilEndTime",
-            "sampleTime",
-            "interval",
-        }
-        for key, nested in value.items():
-            if key not in ignored and (number := _number(nested)) is not None:
-                return number
-    return None

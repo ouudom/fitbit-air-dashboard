@@ -1,4 +1,3 @@
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from hashlib import sha256
 from hmac import compare_digest
@@ -8,7 +7,7 @@ from fastapi import Cookie, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.database import session_scope
+from src.core.dependencies import database_session
 from src.core.time import utc_now
 from src.modules.auth.models import Session, User
 
@@ -18,11 +17,6 @@ class Principal:
     user_id: int
     email: str
     session_id: UUID
-
-
-async def database_session() -> AsyncIterator[AsyncSession]:
-    async for session in session_scope():
-        yield session
 
 
 async def current_principal(

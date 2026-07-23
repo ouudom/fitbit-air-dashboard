@@ -32,6 +32,12 @@ def test_http_framework_stays_in_routers() -> None:
                 assert not any(name.startswith("fastapi") for name in imports(path)), path
 
 
+def test_repositories_are_http_framework_independent() -> None:
+    for module in MODULES:
+        for path in (ROOT / module).glob("repository.py"):
+            assert not any(name.startswith("fastapi") for name in imports(path)), path
+
+
 def test_core_does_not_import_modules() -> None:
     for path in CORE.glob("*.py"):
         assert not any(name.startswith("src.modules") for name in imports(path)), path

@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import json
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -13,39 +13,9 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from src.core.time import utc_now
+from src.modules.google_health.registry import WEBHOOK_DATA_TYPE_IDS
 
 SIGNATURE_HEADER = "GOOGLE-HEALTH-API-SIGNATURE"
-VERIFIER_USER_AGENT = "Google-Health-API-Webhooks-Verifier"
-
-SUPPORTED_WEBHOOK_DATA_TYPES = (
-    "active-zone-minutes",
-    "activity-level",
-    "altitude",
-    "blood-glucose",
-    "body-fat",
-    "calories-in-heart-rate-zone",
-    "daily-heart-rate-variability",
-    "daily-heart-rate-zones",
-    "daily-oxygen-saturation",
-    "daily-respiratory-rate",
-    "daily-resting-heart-rate",
-    "daily-sleep-temperature-derivations",
-    "distance",
-    "exercise",
-    "floors",
-    "heart-rate",
-    "heart-rate-variability",
-    "height",
-    "hydration-log",
-    "nutrition-log",
-    "respiratory-rate-sleep-summary",
-    "run-vo2-max",
-    "sedentary-period",
-    "sleep",
-    "steps",
-    "time-in-heart-rate-zone",
-    "weight",
-)
 
 
 class WebhookSignatureError(ValueError):
@@ -155,8 +125,6 @@ class GoogleHealthSignatureVerifier:
         return self._keys
 
     async def _refresh_keys(self) -> None:
-        from datetime import timedelta
-
         response = await self.http.get(self.keyset_url)
         response.raise_for_status()
         keyset = response.json()
@@ -280,7 +248,7 @@ class GoogleHealthSubscriberClient:
             "endpointUri": endpoint_uri,
             "subscriberConfigs": [
                 {
-                    "dataTypes": list(SUPPORTED_WEBHOOK_DATA_TYPES),
+                    "dataTypes": list(WEBHOOK_DATA_TYPE_IDS),
                     "subscriptionCreatePolicy": "AUTOMATIC",
                 }
             ],

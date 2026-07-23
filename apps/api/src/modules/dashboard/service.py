@@ -11,7 +11,7 @@ from src.modules.google_health.models import (
     GoogleHealthRecord,
     GoogleHealthSyncJob,
 )
-from src.modules.google_health.sync import _number
+from src.modules.google_health.normalization import extract_number
 from src.modules.timeline.service import TimelineService
 
 
@@ -20,13 +20,14 @@ class DashboardService:
         self.db = db
         self.settings = settings
 
-    async def get(self, user_id: int, day: date) -> dict[str, object]:
+    async def get(self, user_id: int, day: date | None) -> dict[str, object]:
         timezone_name = await self.db.scalar(select(User.timezone).where(User.id == user_id))
         timezone = ZoneInfo(timezone_name or self.settings.app_timezone)
+        selected_day = day or datetime.now(timezone).date()
         return {
-            "date": day.isoformat(),
+            "date": selected_day.isoformat(),
             "timezone": timezone.key,
-            "metrics": await self._metrics(user_id, day, timezone),
+            "metrics": await self._metrics(user_id, selected_day, timezone),
             "timeline": [
                 {
                     "id": item.id,
@@ -37,7 +38,11 @@ class DashboardService:
                     "detail": item.detail,
                     "freshness": item.freshness,
                 }
-                for item in await TimelineService(self.db).for_day(user_id, day, timezone)
+                for item in await TimelineService(self.db).for_day(
+                    user_id,
+                    selected_day,
+                    timezone,
+                )
             ],
             "sync": await self._sync(user_id),
         }
@@ -53,7 +58,9 @@ class DashboardService:
         )
         step_records = [record for record in records if record.data_type == "steps"]
         steps = sum(
-            value for record in step_records if (value := _number(record.raw_payload)) is not None
+            value
+            for record in step_records
+            if (value := extract_number(record.raw_payload)) is not None
         )
         sleep_row = next(
             (

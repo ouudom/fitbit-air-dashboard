@@ -9,9 +9,9 @@ import httpx
 import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
-from src import create_app
 from src.core.config import Settings, get_settings
-from src.modules.auth.dependencies import database_session
+from src.core.dependencies import database_session
+from src.main import create_app
 from src.modules.google_health.webhook_processor import process_webhook_event
 from src.modules.google_health.webhooks import (
     GoogleHealthSignatureVerifier,

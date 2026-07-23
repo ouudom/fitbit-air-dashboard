@@ -12,6 +12,7 @@ from src.modules.google_health.client import GoogleHealthClient
 from src.modules.google_health.crypto import TokenCipher
 from src.modules.google_health.models import GoogleHealthConnection
 from src.modules.google_health.oauth_state import OAuthStateStore, RedisOAuthStateStore
+from src.modules.google_health.sync import seed_sync_jobs
 
 
 class OAuthService:
@@ -70,12 +71,19 @@ class OAuthService:
         existing = await self.db.scalar(
             select(GoogleHealthConnection).where(GoogleHealthConnection.user_id == user_id)
         )
-        connection = existing or GoogleHealthConnection(user_id=user_id, access_token="")
-        connection.access_token = self.cipher.encrypt(data["access_token"]) or ""
+        connection = existing or GoogleHealthConnection(
+            user_id=user_id,
+            access_token_ciphertext="",
+        )
+        connection.access_token_ciphertext = self.cipher.encrypt(data["access_token"]) or ""
         if data.get("refresh_token"):
-            connection.refresh_token = self.cipher.encrypt(data["refresh_token"])
-        connection.expires_at = utc_now() + timedelta(seconds=int(data.get("expires_in", 3600)))
-        connection.scope = data.get("scope")
+            connection.refresh_token_ciphertext = self.cipher.encrypt(data["refresh_token"])
+        connection.token_expires_at = utc_now() + timedelta(
+            seconds=int(data.get("expires_in", 3600))
+        )
+        scope = data.get("scope")
+        if isinstance(scope, str):
+            connection.scopes = scope.split()
         if existing is None:
             self.db.add(connection)
         await self.db.flush()
@@ -87,11 +95,25 @@ class OAuthService:
         health_user_id = str(identity.get("healthUserId", ""))
         if not health_user_id:
             raise RuntimeError("Google Health identity missing")
-        connection.health_user_id = health_user_id
+        connection.provider_user_id = health_user_id
         connection.last_verified_at = utc_now()
         connection.status = "active"
         await self.db.commit()
-        from src.modules.google_health.sync import seed_sync_jobs
-
         await seed_sync_jobs(self.db, connection)
         return user_id
+
+    async def revoke_token(self, connection: GoogleHealthConnection) -> None:
+        token = self.cipher.decrypt(connection.refresh_token_ciphertext) or self.cipher.decrypt(
+            connection.access_token_ciphertext
+        )
+        if not token:
+            return
+        async with httpx.AsyncClient(timeout=30) as http:
+            response = await http.post(
+                self.settings.google_revoke_url,
+                params={"token": token},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+        if response.status_code == 400:
+            return
+        response.raise_for_status()

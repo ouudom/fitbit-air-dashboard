@@ -2,10 +2,10 @@ from sqlalchemy import UniqueConstraint
 from src.core.database import Base
 from src.modules.auth.models import Session, User
 from src.modules.google_health.models import (
-    GhWebhookEvent,
     GoogleHealthConnection,
     GoogleHealthRecord,
     GoogleHealthSyncJob,
+    GoogleHealthWebhookEvent,
 )
 
 
@@ -57,7 +57,7 @@ def test_record_identity_and_raw_payload_are_persisted() -> None:
 
 
 def test_webhook_inbox_has_deduplication_and_interval_fields() -> None:
-    table = GhWebhookEvent.__table__
+    table = GoogleHealthWebhookEvent.__table__
     unique_columns = {
         tuple(column.name for column in constraint.columns)
         for constraint in table.constraints

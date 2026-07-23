@@ -25,15 +25,13 @@ def _create_users() -> None:
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("email", sa.String(255), nullable=False),
-        sa.Column("password", sa.String(255), nullable=False),
+        sa.Column("password_hash", sa.String(255), nullable=False),
         sa.Column(
             "timezone",
             sa.String(64),
             nullable=False,
             server_default="Asia/Phnom_Penh",
         ),
-        sa.Column("email_verified_at", sa.DateTime(timezone=True)),
-        sa.Column("remember_token", sa.String(100)),
         sa.Column(
             "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
         ),

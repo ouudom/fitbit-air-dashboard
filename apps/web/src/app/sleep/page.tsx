@@ -1,5 +1,5 @@
 import { DashboardRoute } from "@/modules/dashboard/DashboardRoute";
 
-export default function StasisArchitecturePage() {
+export default function SleepPage() {
   return <DashboardRoute view="sleep" />;
 }

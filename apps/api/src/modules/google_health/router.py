@@ -1,31 +1,38 @@
-from datetime import timedelta
 from functools import lru_cache
 from typing import Annotated
-from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
+import httpx
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import Settings, get_settings
-from src.core.time import utc_now
+from src.core.dependencies import database_session
+from src.core.errors import ConflictError, NotFoundError
 from src.modules.auth.dependencies import (
     Principal,
     current_principal,
-    database_session,
     require_csrf,
 )
-from src.modules.google_health.models import (
-    GhWebhookEvent,
-    GoogleHealthConnection,
-    GoogleHealthSyncJob,
+from src.modules.google_health.dependencies import (
+    get_google_health_repository,
+    get_google_health_service,
 )
 from src.modules.google_health.oauth import OAuthService
+from src.modules.google_health.repository import GoogleHealthRepository
 from src.modules.google_health.schemas import SyncRequest
-from src.modules.google_health.sync import seed_sync_jobs
-from src.modules.google_health.tasks import sync_google_health_type
+from src.modules.google_health.service import GoogleHealthService
+from src.modules.google_health.tasks import process_google_health_webhook
 from src.modules.google_health.webhooks import (
     SIGNATURE_HEADER,
     GoogleHealthSignatureVerifier,
@@ -52,6 +59,12 @@ def get_signature_verifier(
     )
 
 
+def translate_service_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, NotFoundError):
+        return HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
+    return HTTPException(status.HTTP_409_CONFLICT, str(exc))
+
+
 @router.get("/integrations/google-health/connect")
 async def connect(
     principal: Annotated[Principal, Depends(current_principal)],
@@ -76,103 +89,94 @@ async def callback(
     return RedirectResponse("/?connected=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
+@router.get("/integrations/google-health")
+async def integration_status(
+    principal: Annotated[Principal, Depends(current_principal)],
+    service: Annotated[GoogleHealthService, Depends(get_google_health_service)],
+) -> dict[str, object]:
+    return await service.integration_status(principal.user_id)
+
+
+@router.post("/integrations/google-health/disconnect")
+async def disconnect(
+    principal: Annotated[Principal, Depends(require_csrf)],
+    service: Annotated[GoogleHealthService, Depends(get_google_health_service)],
+) -> dict[str, object]:
+    try:
+        return await service.disconnect(principal.user_id)
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            "Google token revocation failed; connection retained for retry",
+        ) from exc
+
+
 @router.post("/sync", status_code=status.HTTP_202_ACCEPTED)
 async def queue_sync(
     payload: SyncRequest,
     principal: Annotated[Principal, Depends(require_csrf)],
-    db: AsyncSession = Depends(database_session),
-) -> dict[str, str]:
-    connection = await db.scalar(
-        select(GoogleHealthConnection).where(
-            GoogleHealthConnection.user_id == principal.user_id,
-            GoogleHealthConnection.status == "active",
-        )
-    )
-    if connection is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Google Health not connected")
-    await seed_sync_jobs(db, connection)
-    end = utc_now()
-    start = end - timedelta(days=payload.days)
-    jobs = list(
-        (
-            await db.scalars(
-                select(GoogleHealthSyncJob).where(
-                    GoogleHealthSyncJob.connection_id == connection.id,
-                    GoogleHealthSyncJob.enabled.is_(True),
-                )
-            )
-        ).all()
-    )
-    for job in jobs:
-        sync_google_health_type.delay(
-            str(connection.id),
-            job.data_type,
-            "manual",
-            start.isoformat(),
-            end.isoformat(),
-        )
-    return {"jobId": str(connection.id), "status": "queued"}
-
-
-@router.get("/sync/{job_id}")
-async def sync_status(
-    job_id: UUID,
-    principal: Annotated[Principal, Depends(current_principal)],
-    db: AsyncSession = Depends(database_session),
+    service: Annotated[GoogleHealthService, Depends(get_google_health_service)],
 ) -> dict[str, object]:
-    connection = await db.scalar(
-        select(GoogleHealthConnection).where(
-            GoogleHealthConnection.id == job_id,
-            GoogleHealthConnection.user_id == principal.user_id,
+    try:
+        selected = await service.queue_sync(principal.user_id, payload)
+    except (ConflictError, NotFoundError) as exc:
+        raise translate_service_error(exc) from exc
+    return {"status": "queued", "dataTypes": selected}
+
+
+@router.get("/sync")
+async def list_sync_jobs(
+    principal: Annotated[Principal, Depends(current_principal)],
+    service: Annotated[GoogleHealthService, Depends(get_google_health_service)],
+) -> dict[str, object]:
+    try:
+        return await service.sync_jobs(principal.user_id)
+    except NotFoundError as exc:
+        raise translate_service_error(exc) from exc
+
+
+@router.get("/sync/{data_type}")
+async def sync_status(
+    data_type: str,
+    principal: Annotated[Principal, Depends(current_principal)],
+    service: Annotated[GoogleHealthService, Depends(get_google_health_service)],
+) -> dict[str, object]:
+    try:
+        return await service.sync_status(principal.user_id, data_type)
+    except NotFoundError as exc:
+        raise translate_service_error(exc) from exc
+
+
+@router.post("/sync/{data_type}", status_code=status.HTTP_202_ACCEPTED)
+async def queue_data_type_sync(
+    data_type: str,
+    principal: Annotated[Principal, Depends(require_csrf)],
+    service: Annotated[GoogleHealthService, Depends(get_google_health_service)],
+    payload: SyncRequest = Body(default_factory=SyncRequest),
+) -> dict[str, str]:
+    try:
+        await service.queue_sync(
+            principal.user_id,
+            payload,
+            requested_type=data_type,
         )
-    )
-    if connection is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sync job not found")
-    jobs = list(
-        (
-            await db.scalars(
-                select(GoogleHealthSyncJob)
-                .where(GoogleHealthSyncJob.connection_id == connection.id)
-                .order_by(GoogleHealthSyncJob.priority, GoogleHealthSyncJob.data_type)
-            )
-        ).all()
-    )
-    statuses = [
-        {
-            "dataType": job.data_type,
-            "fetchMethod": job.fetch_method,
-            "status": job.status,
-            "recordCount": job.record_count,
-            "error": job.error,
-            "lastSucceededAt": (
-                job.last_succeeded_at.isoformat() if job.last_succeeded_at else None
-            ),
-        }
-        for job in jobs
-    ]
-    overall = (
-        "failed"
-        if any(job.status == "failed" for job in jobs)
-        else "running"
-        if any(job.status in {"queued", "running"} for job in jobs)
-        else "completed"
-    )
-    return {
-        "jobId": str(connection.id),
-        "status": overall,
-        "result": statuses,
-        "error": None,
-        "updatedAt": max(
-            (job.updated_at for job in jobs), default=connection.updated_at
-        ).isoformat(),
-    }
+    except (ConflictError, NotFoundError) as exc:
+        raise translate_service_error(exc) from exc
+    return {"status": "queued", "dataType": data_type}
 
 
-@router.post("/webhooks/google-health")
+@router.post(
+    "/webhooks/google-health",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={200: {"description": "Endpoint verification accepted"}},
+)
 async def google_health_webhook(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
-    db: Annotated[AsyncSession, Depends(database_session)],
+    repository: Annotated[
+        GoogleHealthRepository,
+        Depends(get_google_health_repository),
+    ],
     verifier: Annotated[GoogleHealthSignatureVerifier, Depends(get_signature_verifier)],
     authorization: Annotated[str | None, Header()] = None,
     google_health_api_signature: Annotated[str | None, Header(alias=SIGNATURE_HEADER)] = None,
@@ -199,48 +203,7 @@ async def google_health_webhook(
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
-    connection_id = await db.scalar(
-        select(GoogleHealthConnection.id).where(
-            GoogleHealthConnection.provider_user_id == notification.provider_user_id
-        )
-    )
-    interval_start, interval_end = notification.physical_interval
-    civil_start, civil_end = notification.civil_interval
-    statement = (
-        insert(GhWebhookEvent)
-        .values(
-            connection_id=connection_id,
-            provider_user_id=notification.provider_user_id,
-            provider_subscription_name=notification.subscription_name,
-            data_type_ids=[notification.data_type],
-            operation=notification.operation,
-            interval_start=interval_start,
-            interval_end=interval_end,
-            civil_start_date=civil_start,
-            civil_end_date=civil_end,
-            event_hash=notification.event_hash,
-            raw_payload=notification.raw_payload,
-            signature_verified=True,
-            status="queued",
-        )
-        .on_conflict_do_nothing(index_elements=["event_hash"])
-        .returning(GhWebhookEvent.id)
-    )
-    event_id = (await db.execute(statement)).scalar_one_or_none()
-    await db.commit()
-
-    if event_id is None:
-        duplicate = (
-            await db.execute(
-                select(GhWebhookEvent.id, GhWebhookEvent.status).where(
-                    GhWebhookEvent.event_hash == notification.event_hash
-                )
-            )
-        ).one()
-        if duplicate.status in {"queued", "failed"}:
-            event_id = duplicate.id
+    event_id = await repository.store_webhook_event(notification)
     if event_id is not None:
-        from src.modules.google_health.tasks import process_google_health_webhook
-
         process_google_health_webhook.delay(str(event_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)

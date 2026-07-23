@@ -37,10 +37,14 @@ class AuthService:
         normalized = email.lower().strip()
         user = await self.db.scalar(select(User).where(User.email == normalized))
         if user is None:
-            user = User(email=normalized, password=hash_password(password), name="Admin")
+            user = User(
+                email=normalized,
+                password_hash=hash_password(password),
+                name="Admin",
+            )
             self.db.add(user)
         else:
-            user.password = hash_password(password)
+            user.password_hash = hash_password(password)
         try:
             await self.db.flush()
         except IntegrityError as exc:
@@ -50,7 +54,7 @@ class AuthService:
 
     async def login(self, email: str, password: str) -> IssuedSession:
         user = await self.db.scalar(select(User).where(User.email == email.lower().strip()))
-        if user is None or not verify_password(password, user.password):
+        if user is None or not verify_password(password, user.password_hash):
             raise AuthenticationError("Invalid email or password")
         return await self._issue(user)
 

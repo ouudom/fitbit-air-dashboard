@@ -44,47 +44,6 @@ class GoogleHealthConnection(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Temporary compatibility properties for callers migrating from the v1 model.
-    @property
-    def health_user_id(self) -> str | None:
-        return self.provider_user_id
-
-    @health_user_id.setter
-    def health_user_id(self, value: str | None) -> None:
-        self.provider_user_id = value
-
-    @property
-    def access_token(self) -> str:
-        return self.access_token_ciphertext
-
-    @access_token.setter
-    def access_token(self, value: str) -> None:
-        self.access_token_ciphertext = value
-
-    @property
-    def refresh_token(self) -> str | None:
-        return self.refresh_token_ciphertext
-
-    @refresh_token.setter
-    def refresh_token(self, value: str | None) -> None:
-        self.refresh_token_ciphertext = value
-
-    @property
-    def expires_at(self) -> datetime | None:
-        return self.token_expires_at
-
-    @expires_at.setter
-    def expires_at(self, value: datetime | None) -> None:
-        self.token_expires_at = value
-
-    @property
-    def scope(self) -> str | None:
-        return " ".join(self.scopes) if self.scopes else None
-
-    @scope.setter
-    def scope(self, value: str | None) -> None:
-        self.scopes = value.split() if value else []
-
 
 class GoogleHealthSyncJob(Base):
     __tablename__ = "gh_sync_job"
@@ -171,7 +130,7 @@ class GoogleHealthRecord(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class GhWebhookEvent(Base):
+class GoogleHealthWebhookEvent(Base):
     __tablename__ = "gh_webhook_events"
     __table_args__ = (
         UniqueConstraint("event_hash", name="uq_gh_webhook_events_event_hash"),

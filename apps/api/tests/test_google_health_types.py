@@ -1,7 +1,8 @@
 import pytest
-from src.modules.google_health.types import (
+from src.modules.google_health.registry import (
     DATA_TYPE_REGISTRY,
     DATA_TYPES,
+    WEBHOOK_DATA_TYPE_IDS,
     FetchMethod,
     validate_registry,
 )
@@ -56,4 +57,10 @@ def test_registry_declares_supported_operations() -> None:
         "reconcile",
         "rollup",
         "daily_rollup",
+    )
+
+
+def test_webhook_capability_has_one_registry_source() -> None:
+    assert {item.endpoint_id for item in DATA_TYPES if item.webhook_supported} == set(
+        WEBHOOK_DATA_TYPE_IDS
     )

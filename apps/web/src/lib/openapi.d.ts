@@ -106,7 +106,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sync": {
+    "/api/v1/integrations/google-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Integration Status */
+        get: operations["integration_status_api_v1_integrations_google_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/google-health/disconnect": {
         parameters: {
             query?: never;
             header?: never;
@@ -114,6 +131,24 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        put?: never;
+        /** Disconnect */
+        post: operations["disconnect_api_v1_integrations_google_health_disconnect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Sync Jobs */
+        get: operations["list_sync_jobs_api_v1_sync_get"];
         put?: never;
         /** Queue Sync */
         post: operations["queue_sync_api_v1_sync_post"];
@@ -123,7 +158,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sync/{job_id}": {
+    "/api/v1/sync/{data_type}": {
         parameters: {
             query?: never;
             header?: never;
@@ -131,9 +166,10 @@ export interface paths {
             cookie?: never;
         };
         /** Sync Status */
-        get: operations["sync_status_api_v1_sync__job_id__get"];
+        get: operations["sync_status_api_v1_sync__data_type__get"];
         put?: never;
-        post?: never;
+        /** Queue Data Type Sync */
+        post: operations["queue_data_type_sync_api_v1_sync__data_type__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -258,6 +294,12 @@ export interface components {
              * @default 30
              */
             days: number;
+            /** Datatypes */
+            dataTypes?: string[] | null;
+            /** Startat */
+            startAt?: string | null;
+            /** Endat */
+            endAt?: string | null;
         };
         /** SyncStateResponse */
         SyncStateResponse: {
@@ -503,6 +545,108 @@ export interface operations {
             };
         };
     };
+    integration_status_api_v1_integrations_google_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                lifestats_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disconnect_api_v1_integrations_google_health_disconnect_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                lifestats_csrf?: string | null;
+                lifestats_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sync_jobs_api_v1_sync_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                lifestats_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     queue_sync_api_v1_sync_post: {
         parameters: {
             query?: never;
@@ -528,7 +672,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string;
+                        [key: string]: unknown;
                     };
                 };
             };
@@ -543,12 +687,12 @@ export interface operations {
             };
         };
     };
-    sync_status_api_v1_sync__job_id__get: {
+    sync_status_api_v1_sync__data_type__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                job_id: string;
+                data_type: string;
             };
             cookie?: {
                 lifestats_session?: string | null;
@@ -578,6 +722,48 @@ export interface operations {
             };
         };
     };
+    queue_data_type_sync_api_v1_sync__data_type__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                data_type: string;
+            };
+            cookie?: {
+                lifestats_csrf?: string | null;
+                lifestats_session?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SyncRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     google_health_webhook_api_v1_webhooks_google_health_post: {
         parameters: {
             query?: never;
@@ -590,14 +776,19 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Endpoint verification accepted */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
+                content?: never;
+            };
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
