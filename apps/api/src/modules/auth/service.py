@@ -11,7 +11,7 @@ from src.core.config import Settings
 from src.core.errors import AuthenticationError, ConflictError, NotFoundError
 from src.core.security import hash_password, verify_password
 from src.core.time import utc_now
-from src.modules.identity.models import AdminAccount, AppSession, User
+from src.modules.auth.models import AdminAccount, AppSession, User
 
 
 @dataclass(frozen=True)
@@ -21,7 +21,7 @@ class IssuedSession:
     user: User
 
 
-class IdentityService:
+class AuthService:
     def __init__(self, db: AsyncSession, settings: Settings) -> None:
         self.db = db
         self.settings = settings

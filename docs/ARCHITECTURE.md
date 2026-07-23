@@ -17,7 +17,7 @@ Complex integrations may add focused adapter files. Google Health owns its OAuth
 
 | Context | Owns |
 | --- | --- |
-| Identity | private admin, sessions, setup lifecycle |
+| Auth | private admin, sessions, setup lifecycle |
 | Google Health | OAuth connection, transport, sync jobs, provider writes |
 | Timeline | merged event read model |
 | Dashboard | Today response composition |

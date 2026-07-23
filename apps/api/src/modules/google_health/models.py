@@ -26,14 +26,6 @@ class GoogleHealthConnection(Base):
     )
 
 
-class GoogleOAuthState(Base):
-    __tablename__ = "google_oauth_states"
-
-    state: Mapped[str] = mapped_column(String(128), primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-
-
 class SyncJob(Base):
     __tablename__ = "sync_jobs_v1"
 

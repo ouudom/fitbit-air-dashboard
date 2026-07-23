@@ -5,16 +5,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import Settings, get_settings
 from src.core.errors import AuthenticationError, ConflictError, NotFoundError
-from src.modules.identity.dependencies import (
+from src.modules.auth.dependencies import (
     Principal,
     current_principal,
     database_session,
     require_csrf,
 )
-from src.modules.identity.schemas import Credentials, SessionResponse, SetupRequest
-from src.modules.identity.service import IdentityService, IssuedSession
+from src.modules.auth.schemas import Credentials, SessionResponse, SetupRequest
+from src.modules.auth.service import AuthService, IssuedSession
 
-router = APIRouter(tags=["identity"])
+router = APIRouter(tags=["auth"])
 
 
 def set_session_cookies(response: Response, issued: IssuedSession, settings: Settings) -> None:
@@ -39,7 +39,7 @@ def set_session_cookies(response: Response, issued: IssuedSession, settings: Set
     )
 
 
-def translate_identity_error(exc: Exception) -> HTTPException:
+def translate_auth_error(exc: Exception) -> HTTPException:
     if isinstance(exc, NotFoundError):
         return HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
     if isinstance(exc, ConflictError):
@@ -55,11 +55,11 @@ async def setup(
     settings: Settings = Depends(get_settings),
 ) -> SessionResponse:
     try:
-        issued = await IdentityService(db, settings).setup(
+        issued = await AuthService(db, settings).setup(
             payload.setup_token, payload.email, payload.password
         )
     except (AuthenticationError, ConflictError, NotFoundError) as exc:
-        raise translate_identity_error(exc) from exc
+        raise translate_auth_error(exc) from exc
     set_session_cookies(response, issued, settings)
     return SessionResponse(user={"email": issued.user.email}, csrf_token=issued.csrf_token)
 
@@ -72,9 +72,9 @@ async def login(
     settings: Settings = Depends(get_settings),
 ) -> SessionResponse:
     try:
-        issued = await IdentityService(db, settings).login(payload.email, payload.password)
+        issued = await AuthService(db, settings).login(payload.email, payload.password)
     except AuthenticationError as exc:
-        raise translate_identity_error(exc) from exc
+        raise translate_auth_error(exc) from exc
     set_session_cookies(response, issued, settings)
     return SessionResponse(user={"email": issued.user.email}, csrf_token=issued.csrf_token)
 
@@ -87,7 +87,7 @@ async def logout(
     db: AsyncSession = Depends(database_session),
     settings: Settings = Depends(get_settings),
 ) -> None:
-    await IdentityService(db, settings).logout(token)
+    await AuthService(db, settings).logout(token)
     response.delete_cookie("lifestats_session", path="/")
     response.delete_cookie("lifestats_csrf", path="/")
 

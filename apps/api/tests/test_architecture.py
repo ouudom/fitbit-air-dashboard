@@ -3,7 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1] / "src" / "modules"
 CORE = Path(__file__).parents[1] / "src" / "core"
-MODULES = {"identity", "google_health", "dashboard", "timeline"}
+MODULES = {"auth", "google_health", "dashboard", "timeline"}
 
 
 def imports(path: Path) -> list[str]:

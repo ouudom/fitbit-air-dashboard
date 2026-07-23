@@ -1,0 +1,156 @@
+Project LifeStatsV2 {
+  database_type: "PostgreSQL"
+  Note: "Proposed target schema. Google Health remains authoritative; health tables are rebuildable projections. Requires additive migration and verified legacy-token cutover."
+}
+
+Enum connection_status {
+  active
+  expired
+  revoked
+  error
+}
+
+Enum sync_status {
+  queued
+  running
+  completed
+  failed
+}
+
+Enum gh_record_type {
+  data_point
+  rollup
+}
+
+Enum gh_fetch_method {
+  reconcile
+  list
+  rollup
+  daily_rollup
+}
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  email varchar(320) [not null, unique]
+  name varchar(255) [not null]
+  password_hash varchar(255) [not null]
+  email_verified_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Note: "Application identity. Single-user deployment needs no separate admin table."
+}
+
+Table sessions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null]
+  token_hash char(64) [not null, unique]
+  csrf_token_hash char(64) [not null]
+  expires_at timestamptz [not null]
+  last_seen_at timestamptz
+  revoked_at timestamptz
+  user_agent text
+  ip_address inet
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    user_id
+    expires_at
+    revoked_at
+  }
+}
+
+Table gh_connections {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, unique]
+  provider_user_id text [not null, unique]
+  access_token_ciphertext text [not null]
+  refresh_token_ciphertext text
+  token_expires_at timestamptz
+  scopes text[]
+  status connection_status [not null, default: 'active']
+  last_verified_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Note: "Owns encrypted Google Health credentials. One connection per application user."
+}
+
+Table gh_sync_state {
+  connection_id uuid [not null]
+  data_type text [not null, note: "Kebab-case API identifier"]
+  fetch_method gh_fetch_method [not null]
+  status sync_status [not null, default: 'queued']
+  range_start timestamptz
+  range_end timestamptz
+  next_page_token text
+  record_count bigint [not null, default: 0]
+  last_attempted_at timestamptz
+  last_succeeded_at timestamptz
+  error text
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (connection_id, data_type) [pk]
+    status
+  }
+
+  Note: "Current per-type cursor and health only. Detailed job history belongs in application logs."
+}
+
+Table gh_records {
+  id uuid [pk, default: `gen_random_uuid()`]
+  connection_id uuid [not null]
+  data_type text [not null, note: "Kebab-case API identifier"]
+  record_type gh_record_type [not null]
+  fetch_method gh_fetch_method [not null]
+  provider_name text
+  identity_hash char(64) [not null, note: "Stable identity from type, source, and observation window"]
+  payload_hash char(64) [not null]
+  record_date date
+  started_at timestamptz
+  ended_at timestamptz
+  source_family text
+  raw_payload jsonb [not null, note: "Complete DataPoint, ReconciledDataPoint, or rollup item returned by Google"]
+  provider_updated_at timestamptz
+  first_synced_at timestamptz [not null, default: `now()`]
+  last_synced_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+
+  indexes {
+    (connection_id, data_type, fetch_method, identity_hash) [unique]
+    (connection_id, data_type, record_date)
+    (connection_id, data_type, started_at)
+    provider_name
+  }
+
+  Note: "Single rebuildable store for all 39 data types and both rollup forms. Query fields are extracted; exact returned item remains in raw_payload."
+}
+
+Table gh_webhook_events {
+  id uuid [pk, default: `gen_random_uuid()`]
+  connection_id uuid
+  provider_user_id text [not null]
+  provider_subscription_name text
+  data_type_ids text[] [not null]
+  raw_payload jsonb [not null, note: "Complete verified webhook request body"]
+  signature_verified boolean [not null]
+  status sync_status [not null, default: 'queued']
+  error text
+  received_at timestamptz [not null, default: `now()`]
+  processed_at timestamptz
+
+  indexes {
+    status
+    received_at
+    provider_user_id
+  }
+
+  Note: "Durable webhook inbox. Verify signature, acknowledge quickly, then enqueue affected type syncs."
+}
+
+Ref: sessions.user_id > users.id [delete: cascade]
+Ref: gh_connections.user_id > users.id [delete: cascade]
+Ref: gh_sync_state.connection_id > gh_connections.id [delete: cascade]
+Ref: gh_records.connection_id > gh_connections.id [delete: cascade]
+Ref: gh_webhook_events.connection_id > gh_connections.id [delete: set null]

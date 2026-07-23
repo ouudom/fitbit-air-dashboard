@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 # Register module-owned metadata.
 from src.core.config import get_settings
 from src.core.database import Base
+from src.modules.auth import models as auth_models  # noqa: F401
 from src.modules.google_health import models as google_models  # noqa: F401
-from src.modules.identity import models as identity_models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)

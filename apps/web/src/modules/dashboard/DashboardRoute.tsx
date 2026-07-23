@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, api } from "@/lib/api";
 import type { Session } from "@/lib/types";
-import { AuthScreen } from "@/modules/identity/AuthScreen";
+import { AuthScreen } from "@/modules/auth/AuthScreen";
 import type { DashboardView } from "./layout/DashboardShell";
 import { TodayDashboard } from "./TodayDashboard";
 

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.database import session_scope
 from src.core.time import utc_now
-from src.modules.identity.models import AppSession, User
+from src.modules.auth.models import AppSession, User
 
 
 @dataclass(frozen=True)

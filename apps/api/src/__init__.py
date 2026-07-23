@@ -1,9 +1,9 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from src.modules.auth.router import router as auth_router
 from src.modules.dashboard.router import router as dashboard_router
 from src.modules.google_health.router import router as google_health_router
-from src.modules.identity.router import router as identity_router
 
 
 def create_app() -> FastAPI:
@@ -13,7 +13,7 @@ def create_app() -> FastAPI:
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",
     )
-    application.include_router(identity_router, prefix="/api/v1")
+    application.include_router(auth_router, prefix="/api/v1")
     application.include_router(google_health_router, prefix="/api/v1")
     application.include_router(dashboard_router, prefix="/api/v1")
 

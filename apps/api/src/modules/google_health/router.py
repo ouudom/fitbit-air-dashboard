@@ -6,16 +6,16 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import Settings, get_settings
-from src.modules.google_health.models import SyncJob
-from src.modules.google_health.oauth import OAuthService
-from src.modules.google_health.schemas import SyncRequest
-from src.modules.google_health.tasks import sync_job
-from src.modules.identity.dependencies import (
+from src.modules.auth.dependencies import (
     Principal,
     current_principal,
     database_session,
     require_csrf,
 )
+from src.modules.google_health.models import SyncJob
+from src.modules.google_health.oauth import OAuthService
+from src.modules.google_health.schemas import SyncRequest
+from src.modules.google_health.tasks import sync_job
 
 router = APIRouter(tags=["google-health"])
 

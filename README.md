@@ -21,7 +21,7 @@ apps/
 │       ├── main.py
 │       ├── core/
 │       └── modules/
-│           ├── identity/
+│           ├── auth/
 │           ├── google_health/
 │           ├── dashboard/
 │           └── timeline/

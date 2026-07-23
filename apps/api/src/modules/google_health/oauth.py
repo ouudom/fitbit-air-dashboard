@@ -10,13 +10,20 @@ from src.core.config import Settings
 from src.core.time import utc_now
 from src.modules.google_health.client import GoogleHealthClient
 from src.modules.google_health.crypto import TokenCipher
-from src.modules.google_health.models import GoogleHealthConnection, GoogleOAuthState
+from src.modules.google_health.models import GoogleHealthConnection
+from src.modules.google_health.oauth_state import OAuthStateStore, RedisOAuthStateStore
 
 
 class OAuthService:
-    def __init__(self, db: AsyncSession, settings: Settings) -> None:
+    def __init__(
+        self,
+        db: AsyncSession,
+        settings: Settings,
+        state_store: OAuthStateStore | None = None,
+    ) -> None:
         self.db = db
         self.settings = settings
+        self.state_store = state_store or RedisOAuthStateStore(settings.redis_url)
         self.cipher = TokenCipher(
             settings.token_encryption_key,
             settings.app_key,
@@ -26,12 +33,7 @@ class OAuthService:
     async def authorization_url(self, user_id: int) -> str:
         await self.migrate_legacy_connection(user_id)
         state = secrets.token_urlsafe(32)
-        self.db.add(
-            GoogleOAuthState(
-                state=state, user_id=user_id, expires_at=utc_now() + timedelta(minutes=10)
-            )
-        )
-        await self.db.commit()
+        await self.state_store.issue(state, user_id)
         return (
             self.settings.google_auth_url
             + "?"
@@ -50,12 +52,8 @@ class OAuthService:
         )
 
     async def callback(self, state: str, code: str) -> int:
-        oauth_state = await self.db.scalar(
-            select(GoogleOAuthState).where(
-                GoogleOAuthState.state == state, GoogleOAuthState.expires_at > utc_now()
-            )
-        )
-        if oauth_state is None:
+        user_id = await self.state_store.consume(state)
+        if user_id is None:
             raise ValueError("Invalid OAuth state")
         async with httpx.AsyncClient(timeout=30) as http:
             response = await http.post(
@@ -71,13 +69,9 @@ class OAuthService:
             response.raise_for_status()
             data = response.json()
         existing = await self.db.scalar(
-            select(GoogleHealthConnection).where(
-                GoogleHealthConnection.user_id == oauth_state.user_id
-            )
+            select(GoogleHealthConnection).where(GoogleHealthConnection.user_id == user_id)
         )
-        connection = existing or GoogleHealthConnection(
-            user_id=oauth_state.user_id, access_token=""
-        )
+        connection = existing or GoogleHealthConnection(user_id=user_id, access_token="")
         connection.access_token = self.cipher.encrypt(data["access_token"]) or ""
         if data.get("refresh_token"):
             connection.refresh_token = self.cipher.encrypt(data["refresh_token"])
@@ -86,7 +80,7 @@ class OAuthService:
         if existing is None:
             self.db.add(connection)
         await self.db.flush()
-        client = GoogleHealthClient(self.db, self.settings, oauth_state.user_id)
+        client = GoogleHealthClient(self.db, self.settings, user_id)
         try:
             identity = await client.request("GET", "users/me/identity")
         finally:
@@ -99,9 +93,8 @@ class OAuthService:
             await self.db.rollback()
             raise RuntimeError("This installation is bound to another Google Health user")
         connection.health_user_id = health_user_id
-        await self.db.delete(oauth_state)
         await self.db.commit()
-        return oauth_state.user_id
+        return user_id
 
     async def migrate_legacy_connection(self, user_id: int) -> None:
         exists = await self.db.scalar(
