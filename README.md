@@ -69,31 +69,64 @@ docker compose ps
 
 Open `http://localhost:3000`. First setup requires `SETUP_TOKEN`. After account creation, setup permanently returns 404.
 
-## Hermes MCP
+## MCP agents
 
-LifeStats exposes a per-user Streamable HTTP MCP endpoint at `/mcp`. Create an
-agent token for the LifeStats user, keep the raw value in Hermes, and select only
-the scopes and tools that agent needs. The token identifies the user; MCP tool
-arguments never accept a user ID or email.
+LifeStats exposes a per-user Streamable HTTP MCP endpoint at `/mcp`. Hermes,
+Codex, and Claude use OAuth 2.1 authorization code flow with mandatory PKCE.
+Clients register dynamically. LifeStats asks the signed-in user to approve
+scopes, then binds every issued token to that user and the exact MCP resource.
+No client secret or manually generated agent token is required.
 
 ```yaml
 mcp_servers:
   lifestats:
     url: "https://lifestats.example.com/mcp"
-    headers:
-      Authorization: "Bearer <raw LifeStats agent token>"
+    auth: oauth
     tools:
       resources: false
       prompts: false
 ```
 
-Omitting `tools.include` exposes the complete LifeStats MCP tool catalog. Token
-scopes remain authoritative and reject calls outside the user's grant. Add an
-explicit `include` list when a Hermes instance needs a smaller surface.
+Run `hermes mcp login lifestats` once.
 
-Use HTTPS in deployment. Raw tokens are shown once, stored by Hermes, and
-represented only by hashes in LifeStats. Revoke a compromised token in
-LifeStats without affecting browser sessions or other agents.
+Codex:
+
+```toml
+[mcp_servers.lifestats]
+url = "https://lifestats.example.com/mcp"
+auth = "oauth"
+```
+
+Run `codex mcp login lifestats`.
+
+Claude Code:
+
+```bash
+claude mcp add --transport http lifestats https://lifestats.example.com/mcp
+```
+
+Open `/mcp`, select LifeStats, then authenticate. For Claude hosted custom
+connectors, enter the MCP URL and leave client ID and client secret blank.
+
+OAuth discovery is available at `/.well-known/oauth-authorization-server`,
+`/.well-known/oauth-protected-resource`, and
+`/.well-known/oauth-protected-resource/mcp`. Dynamic registration, token
+exchange, rotation, and revocation use `/oauth/register`, `/oauth/token`, and
+`/oauth/revoke`.
+
+Omitting `tools.include` exposes the complete LifeStats MCP tool catalog.
+Credential scopes remain authoritative and reject calls outside the user's
+grant. Add an explicit `include` list when a Hermes instance needs a smaller
+surface.
+
+Use HTTPS in deployment. Authorization codes and tokens are stored only as
+hashes. Set `MCP_PUBLIC_URL` and `MCP_OAUTH_ISSUER_URL` to public deployment
+URLs. Disconnecting one agent grant immediately invalidates its codes and
+tokens without affecting browser sessions or other agents.
+
+Upgrades retain earlier credential tables and migrations for rollback/data
+safety. Runtime OAuth uses only `oauth_clients`, `oauth_grants`, and
+`oauth_credentials`.
 
 ## Verification
 

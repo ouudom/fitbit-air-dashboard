@@ -8,7 +8,7 @@
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
     }
 
-    @mcp path /mcp /mcp/*
+    @mcp path /mcp /mcp/* /oauth/authorize /oauth/register /oauth/token /oauth/revoke /.well-known/oauth-authorization-server /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/mcp
     handle @mcp {
         reverse_proxy mcp:8001 {
             # MCP server is private to this Compose network. A fixed upstream

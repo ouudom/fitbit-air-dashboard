@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     session_lifetime_hours: int = 24 * 7
     token_encryption_key: str = ""
     app_key: str = ""
+    mcp_public_url: str = "http://localhost:8001/mcp"
+    mcp_oauth_issuer_url: str = "http://localhost:8001"
     google_client_id: str = ""
     google_client_secret: str = ""
     redirect_uri: str = "http://localhost:3000/api/v1/oauth/google-health/callback"
@@ -88,6 +90,10 @@ class Settings(BaseSettings):
             )
         if not self.redirect_uri.startswith("https://"):
             raise ValueError("REDIRECT_URI must use HTTPS in production")
+        if not self.mcp_public_url.startswith("https://"):
+            raise ValueError("MCP_PUBLIC_URL must use HTTPS in production")
+        if not self.mcp_oauth_issuer_url.startswith("https://"):
+            raise ValueError("MCP_OAUTH_ISSUER_URL must use HTTPS in production")
 
         if self.google_health_webhook_enabled:
             webhook_required = {

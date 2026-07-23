@@ -1,6 +1,5 @@
 from sqlalchemy import UniqueConstraint
 from src.core.database import Base
-from src.modules.agent_access.models import AgentToken
 from src.modules.auth.models import Session, User
 from src.modules.google_health.models import (
     GoogleHealthConnection,
@@ -10,18 +9,19 @@ from src.modules.google_health.models import (
 )
 
 
-def test_v2_tables_are_registered_without_legacy_auth_tables() -> None:
+def test_tables_include_oauth_credentials() -> None:
     expected = {
         "users",
         "sessions",
-        "agent_tokens",
+        "oauth_clients",
+        "oauth_grants",
+        "oauth_credentials",
         "gh_connections",
         "gh_sync_job",
         "gh_records",
         "gh_webhook_events",
     }
     assert expected == set(Base.metadata.tables)
-    assert AgentToken.__table__.c.user_id.nullable is False
 
 
 def test_user_timezone_and_session_lifecycle_columns() -> None:

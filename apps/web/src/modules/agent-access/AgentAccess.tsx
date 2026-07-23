@@ -1,110 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useState } from "react";
 import { api } from "@/lib/api";
-import type { AgentScope, AgentToken, IssuedAgentToken } from "@/lib/types";
-
-type ScopeOption = {
-  scope: AgentScope;
-  label: string;
-  detail: string;
-  group: "Read access" | "Sensitive data" | "Actions";
-};
-
-const scopeOptions: ScopeOption[] = [
-  {
-    scope: "profile:read",
-    label: "Profile",
-    detail: "Display name and timezone",
-    group: "Read access",
-  },
-  {
-    scope: "today:read",
-    label: "Today",
-    detail: "Daily metrics and timeline",
-    group: "Read access",
-  },
-  {
-    scope: "fitness:read",
-    label: "Fitness",
-    detail: "Activity, exercise, and trends",
-    group: "Read access",
-  },
-  {
-    scope: "sleep:read",
-    label: "Sleep",
-    detail: "Sleep sessions and trends",
-    group: "Read access",
-  },
-  {
-    scope: "health:read",
-    label: "Health",
-    detail: "Measurements excluding ECG and rhythm alerts",
-    group: "Read access",
-  },
-  {
-    scope: "nutrition:read",
-    label: "Nutrition",
-    detail: "Nutrition and hydration logs",
-    group: "Read access",
-  },
-  {
-    scope: "sync:read",
-    label: "Sync status",
-    detail: "Freshness and synchronization state",
-    group: "Read access",
-  },
-  {
-    scope: "integration:read",
-    label: "Connection status",
-    detail: "Google Health connection state",
-    group: "Read access",
-  },
-  {
-    scope: "ecg:read",
-    label: "Electrocardiograms",
-    detail: "Explicit access to ECG records",
-    group: "Sensitive data",
-  },
-  {
-    scope: "irn:read",
-    label: "Rhythm notifications",
-    detail: "Explicit access to irregular-rhythm alerts",
-    group: "Sensitive data",
-  },
-  {
-    scope: "sync:write",
-    label: "Trigger sync",
-    detail: "Queue Google Health synchronization",
-    group: "Actions",
-  },
-  {
-    scope: "integration:write",
-    label: "Manage connection",
-    detail: "Start or disconnect Google Health authorization",
-    group: "Actions",
-  },
-];
-
-const defaultScopes = new Set<AgentScope>([
-  "profile:read",
-  "today:read",
-  "fitness:read",
-  "sleep:read",
-  "health:read",
-  "nutrition:read",
-  "sync:read",
-  "integration:read",
-]);
-
-const scopeGroups: ScopeOption["group"][] = ["Read access", "Sensitive data", "Actions"];
-
-function status(token: AgentToken): string {
-  if (token.revoked_at) return "Revoked";
-  if (token.expires_at && new Date(token.expires_at) <= new Date()) return "Expired";
-  return "Active";
-}
+import type { AgentOAuthGrant } from "@/lib/types";
 
 function dateTime(value: string | null): string {
   return value
@@ -113,66 +11,15 @@ function dateTime(value: string | null): string {
 }
 
 export function AgentAccess() {
-  const client = useQueryClient();
-  const [selectedScopes, setSelectedScopes] = useState<Set<AgentScope>>(
-    () => new Set(defaultScopes),
-  );
-  const [issued, setIssued] = useState<IssuedAgentToken>();
-  const [copied, setCopied] = useState(false);
-  const [copyError, setCopyError] = useState<string>();
-  const tokens = useQuery({
-    queryKey: ["agent-tokens"],
-    queryFn: () => api<AgentToken[]>("/agent-tokens"),
+  const queryClient = useQueryClient();
+  const grants = useQuery({
+    queryKey: ["oauth-grants"],
+    queryFn: () => api<AgentOAuthGrant[]>("/oauth-grants"),
   });
-  const createToken = useMutation({
-    mutationFn: (payload: { name: string; scopes: AgentScope[]; expires_at?: string }) =>
-      api<IssuedAgentToken>("/agent-tokens", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      }),
-    onSuccess: (token) => {
-      setIssued(token);
-      setCopied(false);
-      setCopyError(undefined);
-      void client.invalidateQueries({ queryKey: ["agent-tokens"] });
-    },
+  const revokeGrant = useMutation({
+    mutationFn: (id: string) => api<void>(`/oauth-grants/${id}`, { method: "DELETE" }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["oauth-grants"] }),
   });
-  const revokeToken = useMutation({
-    mutationFn: (id: string) => api<void>(`/agent-tokens/${id}`, { method: "DELETE" }),
-    onSuccess: () => void client.invalidateQueries({ queryKey: ["agent-tokens"] }),
-  });
-
-  function toggleScope(scope: AgentScope) {
-    setSelectedScopes((current) => {
-      const next = new Set(current);
-      if (next.has(scope)) next.delete(scope);
-      else next.add(scope);
-      return next;
-    });
-  }
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const name = String(form.get("name") ?? "").trim();
-    const expires = String(form.get("expires") ?? "");
-    createToken.mutate({
-      name,
-      scopes: [...selectedScopes],
-      ...(expires ? { expires_at: new Date(`${expires}T23:59:59`).toISOString() } : {}),
-    });
-  }
-
-  async function copyToken() {
-    if (!issued) return;
-    try {
-      await navigator.clipboard.writeText(issued.token);
-      setCopied(true);
-      setCopyError(undefined);
-    } catch {
-      setCopyError("Clipboard unavailable. Select and copy the token manually.");
-    }
-  }
 
   return (
     <div className="viewStack agentAccessView">
@@ -180,172 +27,131 @@ export function AgentAccess() {
         <div>
           <p className="eyebrow">Account utility</p>
           <h1>Agent access</h1>
-          <p>Create scoped credentials for Hermes or another MCP client.</p>
+          <p>Connect an MCP client with browser sign-in. No token or client secret to copy.</p>
         </div>
       </header>
 
-      {issued && (
-        <section className="secretPanel" aria-labelledby="new-token-title">
-          <div>
-            <p className="sectionKicker">Created successfully</p>
-            <h2 id="new-token-title">Copy this token now</h2>
-            <p>LifeStats stores only its hash. This value cannot be shown again.</p>
-          </div>
-          <code>{issued.token}</code>
-          {copyError && (
-            <p className="errorBanner" role="alert">
-              {copyError}
-            </p>
-          )}
-          <div className="tokenActions">
-            <button className="primaryButton" onClick={copyToken} type="button">
-              {copied ? "Copied" : "Copy token"}
-            </button>
-            <button className="secondaryButton" onClick={() => setIssued(undefined)} type="button">
-              I saved it
-            </button>
-          </div>
-        </section>
-      )}
-
       <div className="agentAccessGrid">
-        <section className="panel tokenCreatePanel" aria-labelledby="create-token-title">
+        <section className="panel tokenCreatePanel" aria-labelledby="connect-agent-title">
           <div className="panelHeading">
             <div>
-              <p className="sectionKicker">New credential</p>
-              <h2 id="create-token-title">Create agent token</h2>
+              <p className="sectionKicker">OAuth 2.1 + PKCE</p>
+              <h2 id="connect-agent-title">Connect an agent</h2>
             </div>
           </div>
 
-          <form className="tokenForm" onSubmit={submit}>
-            <div className="tokenFormFields">
-              <label>
-                <span>Name</span>
-                <input
-                  autoComplete="off"
-                  defaultValue="Hermes"
-                  maxLength={100}
-                  name="name"
-                  required
-                />
-              </label>
-              <label>
-                <span>Expires</span>
-                <input min={new Date().toISOString().slice(0, 10)} name="expires" type="date" />
-                <small>Optional</small>
-              </label>
+          <div className="agentSetup">
+            <p>
+              Use your LifeStats MCP URL. Your agent registers itself, opens this app, and asks
+              which permissions to grant.
+            </p>
+
+            <div>
+              <strong>Hermes</strong>
+              <pre>
+                <code>{`mcp_servers:
+  lifestats:
+    url: https://your-host.example/mcp
+    auth: oauth`}</code>
+              </pre>
             </div>
 
-            <div className="scopeGroups">
-              {scopeGroups.map((group) => (
-                <fieldset key={group}>
-                  <legend>{group}</legend>
-                  {scopeOptions
-                    .filter((option) => option.group === group)
-                    .map((option) => (
-                      <label className="scopeOption" key={option.scope}>
-                        <input
-                          checked={selectedScopes.has(option.scope)}
-                          onChange={() => toggleScope(option.scope)}
-                          type="checkbox"
-                        />
-                        <span>
-                          <strong>{option.label}</strong>
-                          <small>{option.detail}</small>
-                        </span>
-                      </label>
-                    ))}
-                </fieldset>
-              ))}
-            </div>
-
-            {createToken.error && (
-              <p className="errorBanner" role="alert">
-                {createToken.error.message}
+            <div>
+              <strong>Codex</strong>
+              <pre>
+                <code>{`[mcp_servers.lifestats]
+url = "https://your-host.example/mcp"
+auth = "oauth"`}</code>
+              </pre>
+              <p>
+                Then run <code>codex mcp login lifestats</code>.
               </p>
-            )}
-            <button
-              className="primaryButton"
-              disabled={createToken.isPending || selectedScopes.size === 0}
-              type="submit"
-            >
-              {createToken.isPending ? "Creating…" : "Create token"}
-            </button>
-          </form>
+            </div>
+
+            <div>
+              <strong>Claude Code</strong>
+              <pre>
+                <code>{`claude mcp add --transport http lifestats \\
+  https://your-host.example/mcp`}</code>
+              </pre>
+              <p>Open <code>/mcp</code> and authenticate.</p>
+            </div>
+          </div>
         </section>
 
-        <section className="panel tokenListPanel" aria-labelledby="tokens-title">
+        <section className="panel tokenListPanel" aria-labelledby="connections-title">
           <div className="panelHeading">
             <div>
-              <p className="sectionKicker">Credentials</p>
-              <h2 id="tokens-title">Agent tokens</h2>
+              <p className="sectionKicker">Your account</p>
+              <h2 id="connections-title">Connected agents</h2>
             </div>
-            {tokens.data && <span className="countPill">{tokens.data.length}</span>}
+            {grants.data && <span className="countPill">{grants.data.length}</span>}
           </div>
 
-          {tokens.isPending && <p className="tokenListState">Loading tokens…</p>}
-          {tokens.isError && (
+          {grants.isPending && <p className="tokenListState">Loading connections…</p>}
+          {grants.isError && (
             <p className="errorBanner" role="alert">
-              {tokens.error.message}
+              {grants.error.message}
             </p>
           )}
-          {tokens.data?.length === 0 && (
+          {grants.data?.length === 0 && (
             <div className="emptyState compactEmpty">
               <span aria-hidden="true">⌘</span>
-              <strong>No agent tokens</strong>
-              <p>Create one when connecting an MCP client.</p>
+              <strong>No connected agents</strong>
+              <p>Start OAuth from Hermes, Codex, or Claude.</p>
             </div>
           )}
-          {tokens.data && tokens.data.length > 0 && (
+          {grants.data && grants.data.length > 0 && (
             <ul className="tokenList">
-              {tokens.data.map((token) => {
-                const tokenStatus = status(token);
-                return (
-                  <li key={token.id}>
-                    <div className="tokenIdentity">
-                      <strong>{token.name}</strong>
-                      <code>{token.token_prefix}…</code>
+              {grants.data.map((grant) => (
+                <li key={grant.id}>
+                  <div className="tokenIdentity">
+                    <strong>{grant.client_name}</strong>
+                    <code>{grant.client_id}</code>
+                  </div>
+                  <span className={`tokenStatus ${grant.revoked_at ? "revoked" : "active"}`}>
+                    {grant.revoked_at ? "Revoked" : "Active"}
+                  </span>
+                  <dl>
+                    <div>
+                      <dt>Connected</dt>
+                      <dd>{dateTime(grant.created_at)}</dd>
                     </div>
-                    <span className={`tokenStatus ${tokenStatus.toLowerCase()}`}>
-                      {tokenStatus}
-                    </span>
-                    <dl>
-                      <div>
-                        <dt>Created</dt>
-                        <dd>{dateTime(token.created_at)}</dd>
-                      </div>
-                      <div>
-                        <dt>Last used</dt>
-                        <dd>{dateTime(token.last_used_at)}</dd>
-                      </div>
-                      <div>
-                        <dt>Expires</dt>
-                        <dd>{token.expires_at ? dateTime(token.expires_at) : "No expiry"}</dd>
-                      </div>
-                    </dl>
-                    <p className="tokenScopes">{token.scopes.join(" · ")}</p>
-                    {!token.revoked_at && (
-                      <button
-                        className="dangerButton"
-                        disabled={revokeToken.isPending}
-                        onClick={() => {
-                          if (window.confirm(`Revoke “${token.name}”? Hermes will lose access.`)) {
-                            revokeToken.mutate(token.id);
-                          }
-                        }}
-                        type="button"
-                      >
-                        Revoke
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
+                    <div>
+                      <dt>Last used</dt>
+                      <dd>{dateTime(grant.last_used_at)}</dd>
+                    </div>
+                    <div>
+                      <dt>Resource</dt>
+                      <dd>{grant.resource}</dd>
+                    </div>
+                  </dl>
+                  <p className="tokenScopes">{grant.scopes.join(" · ")}</p>
+                  {!grant.revoked_at && (
+                    <button
+                      className="dangerButton"
+                      disabled={revokeGrant.isPending}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Disconnect “${grant.client_name}”? Its tokens stop working.`,
+                          )
+                        ) {
+                          revokeGrant.mutate(grant.id);
+                        }
+                      }}
+                      type="button"
+                    >
+                      Disconnect
+                    </button>
+                  )}
+                </li>
+              ))}
             </ul>
           )}
-          {revokeToken.error && (
+          {revokeGrant.error && (
             <p className="errorBanner" role="alert">
-              {revokeToken.error.message}
+              {revokeGrant.error.message}
             </p>
           )}
         </section>

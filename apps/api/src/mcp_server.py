@@ -1,13 +1,18 @@
+import json
+import re
+from collections import deque
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar, Token
 from datetime import date
+from time import monotonic
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import UUID
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from src.core.config import get_settings
@@ -37,7 +42,13 @@ from src.modules.agent.schemas import (
 )
 from src.modules.agent.service import AgentService
 from src.modules.agent_access.schemas import AgentScope
-from src.modules.agent_access.service import AgentPrincipal, AgentTokenService
+from src.modules.agent_access.service import (
+    AgentOAuthClientService,
+    AgentPrincipal,
+    InvalidOAuthClientError,
+    InvalidOAuthGrantError,
+    InvalidOAuthScopeError,
+)
 from src.modules.google_health.registry import (
     ACTIVITY_SCOPE,
     DATA_TYPE_REGISTRY,
@@ -49,6 +60,10 @@ from src.modules.google_health.registry import (
 )
 
 _principal: ContextVar[AgentPrincipal | None] = ContextVar("mcp_principal", default=None)
+_registration_attempts: deque[float] = deque()
+_REGISTRATION_LIMIT = 30
+_REGISTRATION_WINDOW_SECONDS = 60
+_REGISTRATION_BODY_LIMIT = 16 * 1024
 
 mcp = FastMCP(
     "LifeStats",
@@ -75,7 +90,7 @@ def _current_principal() -> AgentPrincipal:
 
 def _require_scope(principal: AgentPrincipal, scope: AgentScope) -> None:
     if not principal.has_scope(scope):
-        raise ToolError(f"Agent token lacks required scope: {scope.value}")
+        raise ToolError(f"OAuth credential lacks required scope: {scope.value}")
 
 
 async def _run[T](
@@ -112,6 +127,369 @@ def _require_query_scopes(principal: AgentPrincipal, data_types: list[str] | Non
 )
 async def healthz(_request: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
+
+
+def _oauth_metadata() -> dict[str, object]:
+    settings = get_settings()
+    issuer = settings.mcp_oauth_issuer_url.rstrip("/")
+    return {
+        "issuer": issuer,
+        "authorization_endpoint": f"{issuer}/oauth/authorize",
+        "token_endpoint": f"{issuer}/oauth/token",
+        "registration_endpoint": f"{issuer}/oauth/register",
+        "revocation_endpoint": f"{issuer}/oauth/revoke",
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "response_types_supported": ["code"],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": ["none"],
+        "revocation_endpoint_auth_methods_supported": ["none"],
+        "scopes_supported": [scope.value for scope in AgentScope],
+    }
+
+
+def _protected_resource_metadata() -> dict[str, object]:
+    settings = get_settings()
+    return {
+        "resource": settings.mcp_public_url,
+        "authorization_servers": [settings.mcp_oauth_issuer_url.rstrip("/")],
+        "bearer_methods_supported": ["header"],
+        "scopes_supported": [scope.value for scope in AgentScope],
+    }
+
+
+@mcp.custom_route(  # type: ignore[untyped-decorator]
+    "/.well-known/oauth-authorization-server",
+    methods=["GET"],
+    include_in_schema=False,
+)
+async def oauth_authorization_server_metadata(_request: Request) -> JSONResponse:
+    return JSONResponse(_oauth_metadata())
+
+
+@mcp.custom_route(  # type: ignore[untyped-decorator]
+    "/.well-known/oauth-protected-resource",
+    methods=["GET"],
+    include_in_schema=False,
+)
+async def oauth_protected_resource_metadata(_request: Request) -> JSONResponse:
+    return JSONResponse(_protected_resource_metadata())
+
+
+@mcp.custom_route(  # type: ignore[untyped-decorator]
+    "/.well-known/oauth-protected-resource/mcp",
+    methods=["GET"],
+    include_in_schema=False,
+)
+async def oauth_mcp_resource_metadata(_request: Request) -> JSONResponse:
+    return JSONResponse(_protected_resource_metadata())
+
+
+def _expected_resource() -> str:
+    return get_settings().mcp_public_url
+
+
+def _resource_parameter(form: dict[str, list[str]]) -> str | None:
+    if "resource" not in form:
+        return _expected_resource()
+    resource = _single(form, "resource")
+    return resource if resource == _expected_resource() else None
+
+
+def _single(form: dict[str, list[str]], name: str) -> str | None:
+    values = form.get(name)
+    return values[0] if values is not None and len(values) == 1 and values[0] else None
+
+
+def _valid_redirect_uri(uri: str) -> bool:
+    if len(uri) > 2048 or any(character.isspace() for character in uri):
+        return False
+    parsed = urlsplit(uri)
+    try:
+        port_is_valid = parsed.port is None or parsed.port > 0
+    except ValueError:
+        return False
+    if (
+        not port_is_valid
+        or not parsed.scheme
+        or not parsed.netloc
+        or parsed.username
+        or parsed.password
+        or parsed.fragment
+    ):
+        return False
+    if parsed.scheme == "https":
+        return parsed.hostname is not None
+    return parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "::1", "localhost"}
+
+
+def _oauth_error(error: str, description: str, status_code: int = 400) -> JSONResponse:
+    headers = {"Cache-Control": "no-store", "Pragma": "no-cache"}
+    return JSONResponse(
+        {"error": error, "error_description": description},
+        status_code=status_code,
+        headers=headers,
+    )
+
+
+def _oauth_redirect(
+    redirect_uri: str,
+    *,
+    error: str,
+    description: str,
+    state: str | None,
+) -> RedirectResponse:
+    parsed = urlsplit(redirect_uri)
+    query = parse_qsl(parsed.query, keep_blank_values=True)
+    query.extend(
+        [
+            ("error", error),
+            ("error_description", description),
+            ("iss", get_settings().mcp_oauth_issuer_url.rstrip("/")),
+        ]
+    )
+    if state is not None:
+        query.append(("state", state))
+    target = urlunsplit(
+        (parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment)
+    )
+    return RedirectResponse(target, status_code=302, headers={"Cache-Control": "no-store"})
+
+
+def _registration_rate_limited() -> bool:
+    now = monotonic()
+    cutoff = now - _REGISTRATION_WINDOW_SECONDS
+    while _registration_attempts and _registration_attempts[0] <= cutoff:
+        _registration_attempts.popleft()
+    if len(_registration_attempts) >= _REGISTRATION_LIMIT:
+        return True
+    _registration_attempts.append(now)
+    return False
+
+
+@mcp.custom_route(  # type: ignore[untyped-decorator]
+    "/oauth/register", methods=["POST"], include_in_schema=False
+)
+async def oauth_register(request: Request) -> JSONResponse:
+    if request.headers.get("content-type", "").partition(";")[0].strip().lower() != (
+        "application/json"
+    ):
+        return _oauth_error("invalid_client_metadata", "JSON request required")
+    if _registration_rate_limited():
+        return _oauth_error("temporarily_unavailable", "Registration rate limit exceeded", 429)
+    try:
+        raw_body = await request.body()
+        if len(raw_body) > _REGISTRATION_BODY_LIMIT:
+            return _oauth_error("invalid_client_metadata", "Registration request is too large")
+        body = json.loads(raw_body)
+    except (UnicodeDecodeError, ValueError):
+        return _oauth_error("invalid_client_metadata", "Request body must be valid JSON")
+    if not isinstance(body, dict):
+        return _oauth_error("invalid_client_metadata", "Client metadata must be an object")
+
+    client_name = body.get("client_name", "MCP client")
+    redirect_uris = body.get("redirect_uris")
+    grant_types = body.get("grant_types", ["authorization_code", "refresh_token"])
+    response_types = body.get("response_types", ["code"])
+    auth_method = body.get("token_endpoint_auth_method", "none")
+    if not isinstance(client_name, str) or not client_name.strip() or len(client_name) > 100:
+        return _oauth_error("invalid_client_metadata", "Valid client_name required")
+    if (
+        not isinstance(redirect_uris, list)
+        or not redirect_uris
+        or len(redirect_uris) > 10
+        or any(not isinstance(uri, str) or not _valid_redirect_uri(uri) for uri in redirect_uris)
+        or len(set(redirect_uris)) != len(redirect_uris)
+    ):
+        return _oauth_error("invalid_redirect_uri", "Valid unique redirect_uris required")
+    if (
+        not isinstance(grant_types, list)
+        or any(not isinstance(value, str) for value in grant_types)
+        or len(grant_types) != len(set(grant_types))
+        or "authorization_code" not in grant_types
+        or not set(grant_types).issubset({"authorization_code", "refresh_token"})
+    ):
+        return _oauth_error("invalid_client_metadata", "Unsupported grant_types")
+    if response_types != ["code"] or auth_method != "none":
+        return _oauth_error(
+            "invalid_client_metadata",
+            "Public authorization-code clients with token_endpoint_auth_method none required",
+        )
+
+    async with SessionFactory() as db:
+        registration = await AgentOAuthClientService(db).register_client(
+            client_name=client_name.strip(),
+            redirect_uris=redirect_uris,
+        )
+    return JSONResponse(
+        {
+            "client_id": registration.client_id,
+            "client_id_issued_at": int(registration.created_at.timestamp()),
+            "client_name": registration.client_name,
+            "redirect_uris": list(registration.redirect_uris),
+            "grant_types": grant_types,
+            "response_types": ["code"],
+            "token_endpoint_auth_method": "none",
+        },
+        status_code=201,
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+    )
+
+
+@mcp.custom_route(  # type: ignore[untyped-decorator]
+    "/oauth/authorize", methods=["GET"], include_in_schema=False
+)
+async def oauth_authorize(request: Request) -> JSONResponse | RedirectResponse:
+    query = parse_qs(request.url.query, keep_blank_values=True)
+    client_id = _single(query, "client_id")
+    redirect_uri = _single(query, "redirect_uri")
+    if client_id is None or redirect_uri is None or not _valid_redirect_uri(redirect_uri):
+        return _oauth_error("invalid_request", "Valid client_id and redirect_uri required")
+    try:
+        async with SessionFactory() as db:
+            client = await AgentOAuthClientService(db).get_client(client_id)
+    except (AuthenticationError, InvalidOAuthClientError):
+        return _oauth_error("unauthorized_client", "OAuth client is unavailable")
+    if redirect_uri not in client.redirect_uris:
+        return _oauth_error("invalid_request", "redirect_uri is not registered")
+    state_values = query.get("state", [])
+    state = state_values[0] if len(state_values) == 1 else None
+    code_challenge = _single(query, "code_challenge")
+    resource = _resource_parameter(query)
+    if (
+        _single(query, "response_type") != "code"
+        or code_challenge is None
+        or _single(query, "code_challenge_method") != "S256"
+        or re.fullmatch(r"[A-Za-z0-9._~-]{43,128}", code_challenge) is None
+        or resource is None
+        or len(query.get("scope", [])) > 1
+        or len(state_values) > 1
+    ):
+        return _oauth_redirect(
+            redirect_uri,
+            error="invalid_request",
+            description="Valid code, resource, singleton scope/state, and PKCE required",
+            state=state,
+        )
+    consent_query = request.url.query
+    if "resource" not in query:
+        consent_query = f"{consent_query}&{urlencode({'resource': resource})}"
+    return RedirectResponse(
+        f"/oauth/consent?{consent_query}",
+        status_code=302,
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@mcp.custom_route(  # type: ignore[untyped-decorator]
+    "/oauth/token", methods=["POST"], include_in_schema=False
+)
+async def oauth_token(request: Request) -> JSONResponse:
+    if request.headers.get("content-type", "").partition(";")[0].strip().lower() != (
+        "application/x-www-form-urlencoded"
+    ):
+        return _oauth_error("invalid_request", "Form-encoded request required")
+    try:
+        form = parse_qs((await request.body()).decode("utf-8"), keep_blank_values=True)
+    except UnicodeDecodeError:
+        return _oauth_error("invalid_request", "Request body must be UTF-8")
+    client_id = _single(form, "client_id")
+    if (
+        client_id is None
+        or "client_secret" in form
+        or request.headers.get("authorization") is not None
+    ):
+        return _oauth_error("invalid_client", "Public client_id without a secret required", 401)
+    grant_type = _single(form, "grant_type")
+    requested_scopes = form.get("scope", [""])[0].split()
+    resource = _resource_parameter(form)
+    if resource is None:
+        return _oauth_error("invalid_target", "Resource is not this MCP server")
+    try:
+        async with SessionFactory() as db:
+            service = AgentOAuthClientService(db)
+            if grant_type == "authorization_code":
+                code = _single(form, "code")
+                redirect_uri = _single(form, "redirect_uri")
+                code_verifier = _single(form, "code_verifier")
+                if (
+                    code is None
+                    or redirect_uri is None
+                    or code_verifier is None
+                    or re.fullmatch(r"[A-Za-z0-9._~-]{43,128}", code_verifier) is None
+                ):
+                    return _oauth_error(
+                        "invalid_request",
+                        "Valid code, redirect_uri, and PKCE code_verifier required",
+                    )
+                issued = await service.exchange_authorization_code(
+                    client_id=client_id,
+                    code=code,
+                    redirect_uri=redirect_uri,
+                    code_verifier=code_verifier,
+                    resource=resource,
+                )
+            elif grant_type == "refresh_token":
+                refresh_token = _single(form, "refresh_token")
+                if refresh_token is None:
+                    return _oauth_error("invalid_request", "Refresh token is required")
+                issued = await service.refresh_access_token(
+                    client_id=client_id,
+                    refresh_token=refresh_token,
+                    requested_scopes=requested_scopes,
+                    resource=resource,
+                )
+            else:
+                return _oauth_error("unsupported_grant_type", "Grant type is not supported")
+    except (AuthenticationError, InvalidOAuthClientError):
+        return _oauth_error("invalid_client", "OAuth client is unavailable", 401)
+    except InvalidOAuthGrantError as exc:
+        return _oauth_error("invalid_grant", str(exc))
+    except InvalidOAuthScopeError as exc:
+        return _oauth_error("invalid_scope", str(exc))
+    response_body = {
+        "access_token": issued.access_token,
+        "token_type": "Bearer",
+        "expires_in": issued.expires_in,
+        "scope": " ".join(scope.value for scope in issued.scopes),
+    }
+    if issued.refresh_token is not None:
+        response_body["refresh_token"] = issued.refresh_token
+    return JSONResponse(
+        response_body,
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+    )
+
+
+@mcp.custom_route(  # type: ignore[untyped-decorator]
+    "/oauth/revoke", methods=["POST"], include_in_schema=False
+)
+async def oauth_revoke(request: Request) -> JSONResponse:
+    if request.headers.get("content-type", "").partition(";")[0].strip().lower() != (
+        "application/x-www-form-urlencoded"
+    ):
+        return _oauth_error("invalid_request", "Form-encoded request required")
+    try:
+        form = parse_qs((await request.body()).decode("utf-8"), keep_blank_values=True)
+    except UnicodeDecodeError:
+        return _oauth_error("invalid_request", "Request body must be UTF-8")
+    client_id = _single(form, "client_id")
+    token = _single(form, "token")
+    if (
+        client_id is None
+        or token is None
+        or "client_secret" in form
+        or request.headers.get("authorization") is not None
+    ):
+        return _oauth_error("invalid_request", "Public client_id and token required")
+    try:
+        async with SessionFactory() as db:
+            await AgentOAuthClientService(db).revoke_token(token, client_id=client_id)
+    except (AuthenticationError, InvalidOAuthClientError):
+        return _oauth_error("invalid_client", "OAuth client is unavailable", 401)
+    return JSONResponse(
+        {},
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+    )
 
 
 @mcp.tool()
@@ -406,7 +784,17 @@ class BearerAuthMiddleware:
         receive: Receive,
         send: Send,
     ) -> None:
-        if scope["type"] != "http" or scope.get("path") == "/healthz":
+        public_paths = {
+            "/healthz",
+            "/.well-known/oauth-authorization-server",
+            "/.well-known/oauth-protected-resource",
+            "/.well-known/oauth-protected-resource/mcp",
+            "/oauth/authorize",
+            "/oauth/register",
+            "/oauth/revoke",
+            "/oauth/token",
+        }
+        if scope["type"] != "http" or scope.get("path") in public_paths:
             await self.application(scope, receive, send)
             return
         raw_token = _bearer_token(scope)
@@ -415,7 +803,10 @@ class BearerAuthMiddleware:
             return
         try:
             async with SessionFactory() as db:
-                principal = await AgentTokenService(db).authenticate(raw_token)
+                principal = await AgentOAuthClientService(db).authenticate_access_token(
+                    raw_token,
+                    expected_resource=_expected_resource(),
+                )
         except AuthenticationError:
             await _unauthorized(scope, receive, send)
             return
@@ -444,10 +835,19 @@ async def _unauthorized(
     receive: Receive,
     send: Send,
 ) -> None:
+    resource = urlsplit(get_settings().mcp_public_url)
+    resource_metadata = (
+        f"{resource.scheme}://{resource.netloc}/.well-known/oauth-protected-resource"
+        f"{resource.path.rstrip('/')}"
+    )
     response = JSONResponse(
-        {"detail": "Invalid or missing agent token"},
+        {"detail": "Invalid or missing OAuth access token"},
         status_code=401,
-        headers={"WWW-Authenticate": "Bearer"},
+        headers={
+            "WWW-Authenticate": (
+                f'Bearer error="invalid_token", resource_metadata="{resource_metadata}"'
+            )
+        },
     )
     await response(scope, receive, send)
 

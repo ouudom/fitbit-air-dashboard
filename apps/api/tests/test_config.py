@@ -13,6 +13,8 @@ def production_settings(**overrides: object) -> Settings:
         "google_client_id": "client-id",
         "google_client_secret": "client-secret",
         "redirect_uri": "https://health.example/api/v1/oauth/google-health/callback",
+        "mcp_public_url": "https://health.example/mcp",
+        "mcp_oauth_issuer_url": "https://health.example",
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)  # type: ignore[arg-type]
@@ -23,6 +25,8 @@ def test_production_requires_real_secrets_and_https_callback() -> None:
         Settings(app_env="production", _env_file=None)
     with pytest.raises(ValidationError, match="REDIRECT_URI must use HTTPS"):
         production_settings(redirect_uri="http://health.example/callback")
+    with pytest.raises(ValidationError, match="MCP_PUBLIC_URL must use HTTPS"):
+        production_settings(mcp_public_url="http://health.example/mcp")
 
 
 def test_valid_production_polling_configuration() -> None:
