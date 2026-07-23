@@ -1,0 +1,455 @@
+from collections.abc import Awaitable, Callable
+from contextvars import ContextVar, Token
+from datetime import date
+from uuid import UUID
+
+from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.transport_security import TransportSecuritySettings
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
+
+from src.core.config import get_settings
+from src.core.database import SessionFactory
+from src.core.errors import AuthenticationError
+from src.modules.agent.schemas import (
+    Capabilities,
+    ConnectionStart,
+    ConnectionStatus,
+    DateRange,
+    DisconnectResult,
+    ExerciseExport,
+    FreshnessReport,
+    HealthRecord,
+    Profile,
+    RecordPage,
+    RecordQuery,
+    Summary,
+    SyncCommand,
+    SyncItem,
+    SyncQueued,
+    SyncStatus,
+    Timeline,
+    Today,
+    Trend,
+    TrendQuery,
+)
+from src.modules.agent.service import AgentService
+from src.modules.agent_access.schemas import AgentScope
+from src.modules.agent_access.service import AgentPrincipal, AgentTokenService
+from src.modules.google_health.registry import (
+    ACTIVITY_SCOPE,
+    DATA_TYPE_REGISTRY,
+    ECG_SCOPE,
+    HEALTH_SCOPE,
+    IRN_SCOPE,
+    NUTRITION_SCOPE,
+    SLEEP_SCOPE,
+)
+
+_principal: ContextVar[AgentPrincipal | None] = ContextVar("mcp_principal", default=None)
+
+mcp = FastMCP(
+    "LifeStats",
+    instructions=(
+        "Private, user-scoped Google Health companion. Results are synced projections; "
+        "their source, freshness, availability, and derivation fields must be preserved."
+    ),
+    stateless_http=True,
+    json_response=True,
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=["mcp:*", "localhost:*", "127.0.0.1:*", "[::1]:*"],
+        allowed_origins=[],
+    ),
+)
+
+
+def _current_principal() -> AgentPrincipal:
+    principal = _principal.get()
+    if principal is None:
+        raise ToolError("Agent authentication context is unavailable")
+    return principal
+
+
+def _require_scope(principal: AgentPrincipal, scope: AgentScope) -> None:
+    if not principal.has_scope(scope):
+        raise ToolError(f"Agent token lacks required scope: {scope.value}")
+
+
+async def _run[T](
+    scope: AgentScope,
+    operation: Callable[[AgentService, int], Awaitable[T]],
+) -> T:
+    principal = _current_principal()
+    _require_scope(principal, scope)
+    async with SessionFactory() as db:
+        service = AgentService(db, get_settings())
+        return await operation(service, principal.user_id)
+
+
+def _require_query_scopes(principal: AgentPrincipal, data_types: list[str] | None) -> None:
+    selected = data_types or list(DATA_TYPE_REGISTRY)
+    unknown = set(selected) - DATA_TYPE_REGISTRY.keys()
+    if unknown:
+        raise ToolError(f"Unsupported Google Health data type: {', '.join(sorted(unknown))}")
+    scope_map = {
+        ACTIVITY_SCOPE: AgentScope.FITNESS_READ,
+        SLEEP_SCOPE: AgentScope.SLEEP_READ,
+        HEALTH_SCOPE: AgentScope.HEALTH_READ,
+        NUTRITION_SCOPE: AgentScope.NUTRITION_READ,
+        ECG_SCOPE: AgentScope.ECG_READ,
+        IRN_SCOPE: AgentScope.IRN_READ,
+    }
+    for data_type in selected:
+        required = scope_map[DATA_TYPE_REGISTRY[data_type].scope]
+        _require_scope(principal, required)
+
+
+@mcp.custom_route(  # type: ignore[untyped-decorator]
+    "/healthz", methods=["GET"], include_in_schema=False
+)
+async def healthz(_request: Request) -> JSONResponse:
+    return JSONResponse({"status": "ok"})
+
+
+@mcp.tool()
+async def get_profile() -> Profile:
+    """Return the authenticated user's display name and timezone."""
+    return await _run(AgentScope.PROFILE_READ, lambda service, user: service.get_profile(user))
+
+
+@mcp.tool()
+async def list_capabilities() -> Capabilities:
+    """List Google Health data types, grants, availability, and supported operations."""
+    return await _run(
+        AgentScope.PROFILE_READ, lambda service, user: service.list_capabilities(user)
+    )
+
+
+@mcp.tool()
+async def get_google_health_status() -> ConnectionStatus:
+    """Return Google Health connection and grant status."""
+    return await _run(
+        AgentScope.INTEGRATION_READ,
+        lambda service, user: service.get_google_health_status(user),
+    )
+
+
+@mcp.tool()
+async def get_connection_status() -> ConnectionStatus:
+    """Return Google Health connection status for connection-management flows."""
+    return await _run(
+        AgentScope.INTEGRATION_READ,
+        lambda service, user: service.get_connection_status(user),
+    )
+
+
+@mcp.tool()
+async def start_google_health_connection() -> ConnectionStart:
+    """Create a browser authorization URL for the authenticated user."""
+    return await _run(
+        AgentScope.INTEGRATION_WRITE,
+        lambda service, user: service.start_google_health_connection(user),
+    )
+
+
+@mcp.tool()
+async def disconnect_google_health(confirm: bool = False) -> DisconnectResult:
+    """Revoke Google Health after explicit confirmation; retain the synced cache."""
+    if not confirm:
+        raise ToolError("Set confirm=true to disconnect Google Health")
+    return await _run(
+        AgentScope.INTEGRATION_WRITE,
+        lambda service, user: service.disconnect_google_health(user),
+    )
+
+
+@mcp.tool()
+async def get_data_freshness() -> FreshnessReport:
+    """Return freshness and record counts for every supported Google Health type."""
+    return await _run(AgentScope.SYNC_READ, lambda service, user: service.get_data_freshness(user))
+
+
+@mcp.tool()
+async def get_today(day: date | None = None) -> Today:
+    """Return Google Health-backed Today data for one local calendar date."""
+    return await _run(AgentScope.TODAY_READ, lambda service, user: service.get_today(user, day))
+
+
+@mcp.tool()
+async def get_timeline(day: date | None = None) -> Timeline:
+    """Return the authenticated user's timeline for one local calendar date."""
+    return await _run(AgentScope.TODAY_READ, lambda service, user: service.get_timeline(user, day))
+
+
+@mcp.tool()
+async def get_fitness_summary(request: DateRange) -> Summary:
+    """Summarize synced fitness data over a date range."""
+    return await _run(
+        AgentScope.FITNESS_READ,
+        lambda service, user: service.get_fitness_summary(user, request),
+    )
+
+
+@mcp.tool()
+async def list_exercises(request: RecordQuery) -> RecordPage:
+    """List paginated exercise records over a date range."""
+    return await _run(
+        AgentScope.FITNESS_READ, lambda service, user: service.list_exercises(user, request)
+    )
+
+
+@mcp.tool()
+async def get_exercise(record_id: UUID) -> HealthRecord:
+    """Return one exercise belonging to the authenticated user."""
+    return await _run(
+        AgentScope.FITNESS_READ, lambda service, user: service.get_exercise(user, record_id)
+    )
+
+
+@mcp.tool()
+async def get_activity_trend(request: TrendQuery) -> Trend:
+    """Return a fitness data-type trend over a date range."""
+    return await _run(
+        AgentScope.FITNESS_READ,
+        lambda service, user: service.get_activity_trend(user, request),
+    )
+
+
+@mcp.tool()
+async def get_heart_rate_zones(request: DateRange) -> Summary:
+    """Summarize synced heart-rate-zone records over a date range."""
+    return await _run(
+        AgentScope.FITNESS_READ,
+        lambda service, user: service.get_heart_rate_zones(user, request),
+    )
+
+
+@mcp.tool()
+async def get_exercise_export(record_id: UUID) -> ExerciseExport:
+    """Return a TCX exercise export when Google Health supplied one."""
+    return await _run(
+        AgentScope.FITNESS_READ,
+        lambda service, user: service.get_exercise_export(user, record_id),
+    )
+
+
+@mcp.tool()
+async def get_sleep_summary(request: DateRange) -> Summary:
+    """Summarize synced sleep data without inventing an official score."""
+    return await _run(
+        AgentScope.SLEEP_READ,
+        lambda service, user: service.get_sleep_summary(user, request),
+    )
+
+
+@mcp.tool()
+async def list_sleep_sessions(request: RecordQuery) -> RecordPage:
+    """List paginated sleep sessions over a date range."""
+    return await _run(
+        AgentScope.SLEEP_READ,
+        lambda service, user: service.list_sleep_sessions(user, request),
+    )
+
+
+@mcp.tool()
+async def get_sleep_session(record_id: UUID) -> HealthRecord:
+    """Return one sleep session belonging to the authenticated user."""
+    return await _run(
+        AgentScope.SLEEP_READ,
+        lambda service, user: service.get_sleep_session(user, record_id),
+    )
+
+
+@mcp.tool()
+async def get_sleep_trend(request: DateRange) -> Trend:
+    """Return sleep record trends over a date range."""
+    return await _run(
+        AgentScope.SLEEP_READ,
+        lambda service, user: service.get_sleep_trend(user, request),
+    )
+
+
+@mcp.tool()
+async def get_health_summary(request: DateRange) -> Summary:
+    """Summarize non-sensitive health measurements over a date range."""
+    return await _run(
+        AgentScope.HEALTH_READ,
+        lambda service, user: service.get_health_summary(user, request),
+    )
+
+
+@mcp.tool()
+async def get_measurement_latest(data_type: str) -> HealthRecord:
+    """Return the latest synced record for a non-sensitive measurement type."""
+    return await _run(
+        AgentScope.HEALTH_READ,
+        lambda service, user: service.get_measurement_latest(user, data_type),
+    )
+
+
+@mcp.tool()
+async def get_measurement_trend(request: TrendQuery) -> Trend:
+    """Return a non-sensitive health measurement trend."""
+    return await _run(
+        AgentScope.HEALTH_READ,
+        lambda service, user: service.get_measurement_trend(user, request),
+    )
+
+
+@mcp.tool()
+async def query_health_data(request: RecordQuery) -> RecordPage:
+    """Query synced types allowed by the token's category and sensitive-data scopes."""
+    principal = _current_principal()
+    _require_query_scopes(principal, request.data_types)
+    async with SessionFactory() as db:
+        return await AgentService(db, get_settings()).query_health_data(principal.user_id, request)
+
+
+@mcp.tool()
+async def list_irregular_rhythm_notifications(request: RecordQuery) -> RecordPage:
+    """List irregular-rhythm notifications with the explicit IRN scope."""
+    return await _run(
+        AgentScope.IRN_READ,
+        lambda service, user: service.list_irregular_rhythm_notifications(user, request),
+    )
+
+
+@mcp.tool()
+async def list_electrocardiograms(request: RecordQuery) -> RecordPage:
+    """List electrocardiograms with the explicit ECG scope."""
+    return await _run(
+        AgentScope.ECG_READ,
+        lambda service, user: service.list_electrocardiograms(user, request),
+    )
+
+
+@mcp.tool()
+async def get_electrocardiogram(record_id: UUID) -> HealthRecord:
+    """Return one electrocardiogram belonging to the authenticated user."""
+    return await _run(
+        AgentScope.ECG_READ,
+        lambda service, user: service.get_electrocardiogram(user, record_id),
+    )
+
+
+@mcp.tool()
+async def get_nutrition_summary(request: DateRange) -> Summary:
+    """Summarize synced nutrition data over a date range."""
+    return await _run(
+        AgentScope.NUTRITION_READ,
+        lambda service, user: service.get_nutrition_summary(user, request),
+    )
+
+
+@mcp.tool()
+async def list_nutrition_logs(request: RecordQuery) -> RecordPage:
+    """List paginated nutrition logs over a date range."""
+    return await _run(
+        AgentScope.NUTRITION_READ,
+        lambda service, user: service.list_nutrition_logs(user, request),
+    )
+
+
+@mcp.tool()
+async def list_hydration_logs(request: RecordQuery) -> RecordPage:
+    """List paginated hydration logs over a date range."""
+    return await _run(
+        AgentScope.NUTRITION_READ,
+        lambda service, user: service.list_hydration_logs(user, request),
+    )
+
+
+@mcp.tool()
+async def get_body_measurements(request: RecordQuery) -> RecordPage:
+    """List body-fat, height, and weight records over a date range."""
+    return await _run(
+        AgentScope.HEALTH_READ,
+        lambda service, user: service.get_body_measurements(user, request),
+    )
+
+
+@mcp.tool()
+async def get_sync_status() -> SyncStatus:
+    """Return synchronization status for all Google Health data types."""
+    return await _run(AgentScope.SYNC_READ, lambda service, user: service.get_sync_status(user))
+
+
+@mcp.tool()
+async def get_data_type_sync_status(data_type: str) -> SyncItem:
+    """Return synchronization status for one Google Health data type."""
+    return await _run(
+        AgentScope.SYNC_READ,
+        lambda service, user: service.get_data_type_sync_status(user, data_type),
+    )
+
+
+@mcp.tool()
+async def trigger_sync(command: SyncCommand) -> SyncQueued:
+    """Queue a bounded Google Health synchronization for the authenticated user."""
+    return await _run(
+        AgentScope.SYNC_WRITE, lambda service, user: service.trigger_sync(user, command)
+    )
+
+
+class BearerAuthMiddleware:
+    """Authenticate MCP requests and bind one immutable per-user principal."""
+
+    def __init__(self, application: ASGIApp) -> None:
+        self.application = application
+
+    async def __call__(
+        self,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+    ) -> None:
+        if scope["type"] != "http" or scope.get("path") == "/healthz":
+            await self.application(scope, receive, send)
+            return
+        raw_token = _bearer_token(scope)
+        if raw_token is None:
+            await _unauthorized(scope, receive, send)
+            return
+        try:
+            async with SessionFactory() as db:
+                principal = await AgentTokenService(db).authenticate(raw_token)
+        except AuthenticationError:
+            await _unauthorized(scope, receive, send)
+            return
+        context_token: Token[AgentPrincipal | None] = _principal.set(principal)
+        try:
+            await self.application(scope, receive, send)
+        finally:
+            _principal.reset(context_token)
+
+
+def _bearer_token(scope: Scope) -> str | None:
+    headers = scope.get("headers", [])
+    values: list[str] = [
+        value.decode("latin-1") for name, value in headers if name.lower() == b"authorization"
+    ]
+    if len(values) != 1:
+        return None
+    scheme, separator, token = values[0].partition(" ")
+    if not separator or scheme.lower() != "bearer" or not token or token.strip() != token:
+        return None
+    return token
+
+
+async def _unauthorized(
+    scope: Scope,
+    receive: Receive,
+    send: Send,
+) -> None:
+    response = JSONResponse(
+        {"detail": "Invalid or missing agent token"},
+        status_code=401,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    await response(scope, receive, send)
+
+
+app = BearerAuthMiddleware(mcp.streamable_http_app())

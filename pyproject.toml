@@ -12,6 +12,7 @@ dependencies = [
   "fastapi>=0.116,<1",
   "google-auth[requests]>=2.40,<3",
   "httpx>=0.28,<1",
+  "mcp>=1.28,<2",
   "pwdlib[argon2]>=0.2,<1",
   "pydantic-settings>=2.10,<3",
   "sqlalchemy[asyncio]>=2.0.41,<3",

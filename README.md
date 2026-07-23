@@ -69,6 +69,32 @@ docker compose ps
 
 Open `http://localhost:3000`. First setup requires `SETUP_TOKEN`. After account creation, setup permanently returns 404.
 
+## Hermes MCP
+
+LifeStats exposes a per-user Streamable HTTP MCP endpoint at `/mcp`. Create an
+agent token for the LifeStats user, keep the raw value in Hermes, and select only
+the scopes and tools that agent needs. The token identifies the user; MCP tool
+arguments never accept a user ID or email.
+
+```yaml
+mcp_servers:
+  lifestats:
+    url: "https://lifestats.example.com/mcp"
+    headers:
+      Authorization: "Bearer <raw LifeStats agent token>"
+    tools:
+      resources: false
+      prompts: false
+```
+
+Omitting `tools.include` exposes the complete LifeStats MCP tool catalog. Token
+scopes remain authoritative and reject calls outside the user's grant. Add an
+explicit `include` list when a Hermes instance needs a smaller surface.
+
+Use HTTPS in deployment. Raw tokens are shown once, stored by Hermes, and
+represented only by hashes in LifeStats. Revoke a compromised token in
+LifeStats without affecting browser sessions or other agents.
+
 ## Verification
 
 ```bash

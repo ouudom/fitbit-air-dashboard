@@ -8,6 +8,15 @@
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
     }
 
+    @mcp path /mcp /mcp/*
+    handle @mcp {
+        reverse_proxy mcp:8001 {
+            # MCP server is private to this Compose network. A fixed upstream
+            # Host keeps SDK DNS-rebinding checks enabled behind this proxy.
+            header_up Host mcp:8001
+        }
+    }
+
     @api path /api/* /healthz
     handle @api {
         reverse_proxy api:8000
