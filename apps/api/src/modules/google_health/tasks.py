@@ -1,12 +1,13 @@
 import asyncio
 import logging
+from collections.abc import Awaitable
 from datetime import datetime
 from uuid import UUID
 
 from celery import Celery
 
 from src.core.config import get_settings
-from src.core.database import SessionFactory
+from src.core.database import SessionFactory, engine
 from src.core.logging import configure_logging
 from src.modules.google_health.sync import (
     SyncService,
@@ -46,7 +47,7 @@ def sync_google_health_type(
     range_start: str | None = None,
     range_end: str | None = None,
 ) -> None:
-    asyncio.run(
+    _run_async_task(
         _sync_google_health_type(
             UUID(connection_id),
             data_type,
@@ -59,12 +60,12 @@ def sync_google_health_type(
 
 @celery_app.task(name="lifestats.dispatch_google_health")  # type: ignore[untyped-decorator]
 def dispatch_google_health() -> None:
-    asyncio.run(_dispatch_google_health())
+    _run_async_task(_dispatch_google_health())
 
 
 @celery_app.task(name="lifestats.purge_google_health_soft_deleted")  # type: ignore[untyped-decorator]
 def purge_google_health_soft_deleted() -> None:
-    asyncio.run(_purge_google_health_soft_deleted())
+    _run_async_task(_purge_google_health_soft_deleted())
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
@@ -75,7 +76,20 @@ def purge_google_health_soft_deleted() -> None:
     max_retries=7,
 )
 def process_google_health_webhook(event_id: str) -> None:
-    asyncio.run(_process_google_health_webhook(UUID(event_id)))
+    _run_async_task(_process_google_health_webhook(UUID(event_id)))
+
+
+def _run_async_task[T](awaitable: Awaitable[T]) -> T:
+    return asyncio.run(_run_and_dispose_engine(awaitable))
+
+
+async def _run_and_dispose_engine[T](awaitable: Awaitable[T]) -> T:
+    try:
+        return await awaitable
+    finally:
+        # Celery reuses worker processes, but asyncio.run() creates a new loop for
+        # every task. Dispose pooled asyncpg connections before that loop closes.
+        await engine.dispose()
 
 
 async def _sync_google_health_type(
