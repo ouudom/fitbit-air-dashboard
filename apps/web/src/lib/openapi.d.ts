@@ -245,6 +245,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/insights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Insights */
+        get: operations["insights_api_v1_insights_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -282,6 +299,29 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** InsightsResponse */
+        InsightsResponse: {
+            /** Start */
+            start: string;
+            /** End */
+            end: string;
+            /** Timezone */
+            timezone: string;
+            /** Source */
+            source: string;
+            /** Derivation */
+            derivation: string;
+            /** Freshness */
+            freshness: string;
+            /** Availability */
+            availability: string;
+            /** Steps */
+            steps: components["schemas"]["StepsPointResponse"][];
+            /** Stepbuckets */
+            stepBuckets: components["schemas"]["StepsBucketResponse"][];
+            /** Sleep */
+            sleep: components["schemas"]["SleepTrendPointResponse"][];
         };
         /** IssuedMcpTokenResponse */
         IssuedMcpTokenResponse: {
@@ -458,6 +498,52 @@ export interface components {
             minutes: number;
             /** Count */
             count: number;
+        };
+        /** SleepTrendPointResponse */
+        SleepTrendPointResponse: {
+            /** Date */
+            date: string;
+            /** Minutesasleep */
+            minutesAsleep: number | null;
+            /** Minutesinsleepperiod */
+            minutesInSleepPeriod: number | null;
+            /** Minutesawake */
+            minutesAwake: number | null;
+            /** Sleepefficiency */
+            sleepEfficiency: number | null;
+            /** Minutesdeep */
+            minutesDeep: number | null;
+            /** Minuteslight */
+            minutesLight: number | null;
+            /** Minutesrem */
+            minutesRem: number | null;
+            /**
+             * Startat
+             * Format: date-time
+             */
+            startAt: string;
+            /**
+             * Endat
+             * Format: date-time
+             */
+            endAt: string;
+        };
+        /** StepsBucketResponse */
+        StepsBucketResponse: {
+            /**
+             * Startedat
+             * Format: date-time
+             */
+            startedAt: string;
+            /** Value */
+            value: number;
+        };
+        /** StepsPointResponse */
+        StepsPointResponse: {
+            /** Date */
+            date: string;
+            /** Value */
+            value: number;
         };
         /** SyncRequest */
         SyncRequest: {
@@ -1096,6 +1182,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DashboardResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    insights_api_v1_insights_get: {
+        parameters: {
+            query: {
+                start: string;
+                end: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                lifestats_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsightsResponse"];
                 };
             };
             /** @description Validation Error */

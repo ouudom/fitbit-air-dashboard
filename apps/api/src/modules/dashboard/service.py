@@ -49,6 +49,45 @@ class DashboardService:
             "sync": await self._sync(user_id),
         }
 
+    async def get_insights(
+        self,
+        user_id: int,
+        start: date,
+        end: date,
+    ) -> dict[str, object]:
+        timezone_name = await self.db.scalar(select(User.timezone).where(User.id == user_id))
+        timezone = ZoneInfo(timezone_name or self.settings.app_timezone)
+        local_start = datetime.combine(start, time.min, timezone)
+        local_end = datetime.combine(end + timedelta(days=1), time.min, timezone)
+        utc_start = local_start.astimezone(UTC)
+        utc_end = local_end.astimezone(UTC)
+        query = (
+            select(GoogleHealthRecord)
+            .join(
+                GoogleHealthConnection,
+                GoogleHealthConnection.id == GoogleHealthRecord.connection_id,
+            )
+            .where(
+                GoogleHealthConnection.user_id == user_id,
+                GoogleHealthRecord.data_type.in_(("steps", "sleep")),
+                GoogleHealthRecord.deleted_at.is_(None),
+                or_(
+                    GoogleHealthRecord.record_date.between(start, end),
+                    (
+                        (GoogleHealthRecord.started_at >= utc_start)
+                        & (GoogleHealthRecord.started_at < utc_end)
+                    ),
+                    (
+                        (GoogleHealthRecord.data_type == "sleep")
+                        & (GoogleHealthRecord.ended_at >= utc_start)
+                        & (GoogleHealthRecord.ended_at < utc_end)
+                    ),
+                ),
+            )
+        )
+        records = list((await self.db.scalars(query)).all())
+        return _insights_from_records(records, start, end, timezone)
+
     async def _metrics(
         self, user_id: int, day: date, timezone: ZoneInfo
     ) -> list[dict[str, object]]:
@@ -326,3 +365,90 @@ def _record_freshness(updated_at: datetime | None) -> str:
         return "unknown"
     age = datetime.now(UTC) - updated_at.astimezone(UTC)
     return "stale" if age > timedelta(days=1) else "fresh"
+
+
+def _insights_from_records(
+    records: list[GoogleHealthRecord],
+    start: date,
+    end: date,
+    timezone: ZoneInfo,
+) -> dict[str, object]:
+    steps_by_day: dict[date, int] = {}
+    step_buckets: dict[datetime, int] = {}
+    sleep_by_day: dict[date, dict[str, object]] = {}
+
+    for record in records:
+        if record.data_type == "steps":
+            value = extract_number(record.raw_payload)
+            if value is None:
+                continue
+            observed = record.record_date
+            if observed is None and record.started_at is not None:
+                observed = record.started_at.astimezone(timezone).date()
+            if observed is None or not start <= observed <= end:
+                continue
+            integer_value = round(value)
+            steps_by_day[observed] = steps_by_day.get(observed, 0) + integer_value
+            if record.started_at is not None and observed == end:
+                local_start = record.started_at.astimezone(timezone)
+                bucket = local_start.replace(minute=0, second=0, microsecond=0)
+                step_buckets[bucket] = step_buckets.get(bucket, 0) + integer_value
+            continue
+
+        if record.data_type != "sleep":
+            continue
+        detail = _sleep_detail_from_record(record)
+        if detail is None:
+            continue
+        end_at = detail["endAt"]
+        if not isinstance(end_at, datetime):
+            continue
+        observed = end_at.astimezone(timezone).date()
+        if not start <= observed <= end:
+            continue
+        current = sleep_by_day.get(observed)
+        current_end = current.get("endAt") if current else None
+        if current is None or (isinstance(current_end, datetime) and end_at > current_end):
+            raw_stage_summary = detail["stageSummary"]
+            stage_minutes = (
+                {
+                    item["type"]: item["minutes"]
+                    for item in raw_stage_summary
+                    if isinstance(item, dict)
+                }
+                if isinstance(raw_stage_summary, list)
+                else {}
+            )
+            sleep_by_day[observed] = {
+                "date": observed.isoformat(),
+                "minutesAsleep": detail["minutesAsleep"],
+                "minutesInSleepPeriod": detail["minutesInSleepPeriod"],
+                "minutesAwake": detail["minutesAwake"],
+                "sleepEfficiency": detail["sleepEfficiency"],
+                "minutesDeep": stage_minutes.get("DEEP"),
+                "minutesLight": stage_minutes.get("LIGHT"),
+                "minutesRem": stage_minutes.get("REM"),
+                "startAt": detail["startAt"],
+                "endAt": end_at,
+            }
+
+    last_synced_at = max((record.last_synced_at for record in records), default=None)
+    available = bool(steps_by_day or sleep_by_day)
+    return {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "timezone": timezone.key,
+        "source": "Google Health",
+        "derivation": "LifeStats projection",
+        "freshness": _record_freshness(last_synced_at),
+        "availability": "available" if available else "not-synced",
+        "steps": [
+            {"date": observed.isoformat(), "value": value}
+            for observed, value in sorted(steps_by_day.items())
+        ],
+        "stepBuckets": [
+            {"startedAt": started_at, "value": value}
+            for started_at, value in sorted(step_buckets.items())
+        ],
+        "sleep": [point for _, point in sorted(sleep_by_day.items())],
+    }

@@ -70,3 +70,39 @@ class DashboardResponse(BaseModel):
     timeline: list[TimelineItemResponse]
     sync: list[SyncStateResponse]
     sleep: SleepDetailResponse | None
+
+
+class StepsPointResponse(BaseModel):
+    date: str
+    value: int
+
+
+class StepsBucketResponse(BaseModel):
+    startedAt: datetime
+    value: int
+
+
+class SleepTrendPointResponse(BaseModel):
+    date: str
+    minutesAsleep: int | None
+    minutesInSleepPeriod: int | None
+    minutesAwake: int | None
+    sleepEfficiency: float | None
+    minutesDeep: int | None
+    minutesLight: int | None
+    minutesRem: int | None
+    startAt: datetime
+    endAt: datetime
+
+
+class InsightsResponse(BaseModel):
+    start: str
+    end: str
+    timezone: str
+    source: str
+    derivation: str
+    freshness: str
+    availability: str
+    steps: list[StepsPointResponse]
+    stepBuckets: list[StepsBucketResponse]
+    sleep: list[SleepTrendPointResponse]

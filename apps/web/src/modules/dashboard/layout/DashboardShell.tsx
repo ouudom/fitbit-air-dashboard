@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppButton } from "@/components/ui/AppButton";
 
-export type DashboardView = "overview" | "sleep" | "settings";
+export type DashboardView = "overview" | "fitness" | "sleep" | "settings";
 
 type DashboardShellProps = {
   activeView: DashboardView;
@@ -20,7 +20,8 @@ const navigation: Array<{
   label: string;
   icon: string;
 }> = [
-  { id: "overview", href: "/dashboard", label: "Dashboard", icon: "⌂" },
+  { id: "overview", href: "/dashboard", label: "Today", icon: "⌂" },
+  { id: "fitness", href: "/fitness", label: "Fitness", icon: "↗" },
   { id: "sleep", href: "/sleep", label: "Sleep", icon: "☾" },
 ];
 
@@ -141,7 +142,7 @@ export function DashboardShell({
       </main>
 
       <Surface
-        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-2 rounded-none border-t border-border pb-[env(safe-area-inset-bottom)] lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 rounded-none border-t border-border pb-[env(safe-area-inset-bottom)] lg:hidden"
         variant="secondary"
       >
         {navigation.map((item) => (

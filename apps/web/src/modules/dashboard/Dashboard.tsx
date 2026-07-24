@@ -11,6 +11,7 @@ import { Settings } from "@/modules/settings/Settings";
 import { DashboardShell, type DashboardView } from "./layout/DashboardShell";
 import { SleepOverview } from "./views/SleepOverview";
 import { DashboardOverview } from "./views/DashboardOverview";
+import { FitnessOverview } from "./views/FitnessOverview";
 
 type IntegrationStatus = {
   connected: boolean;
@@ -119,6 +120,10 @@ export function Dashboard({ email, view }: { email: string; view: DashboardView 
 
       {data && view === "sleep" && (
         <SleepOverview data={data} date={selectedDate} onDateChange={setDate} />
+      )}
+
+      {data && view === "fitness" && (
+        <FitnessOverview date={selectedDate} onDateChange={setDate} />
       )}
 
       {data && view === "settings" && (

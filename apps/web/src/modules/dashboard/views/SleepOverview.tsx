@@ -1,9 +1,24 @@
+"use client";
+
 import { Card, Chip, Surface, Typography } from "@heroui/react";
+import { useQuery } from "@tanstack/react-query";
+import { motion, useReducedMotion } from "motion/react";
+import { useState } from "react";
+import { EvilAnimatedLineChart } from "@/components/charts/EvilCharts";
+import { AppAlert } from "@/components/ui/AppAlert";
 import { AppTextField } from "@/components/ui/AppTextField";
 import { EmptyContent } from "@/components/ui/EmptyContent";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import type { Dashboard } from "@/lib/types";
+import { api } from "@/lib/api";
+import type { Dashboard, Insights } from "@/lib/types";
+import {
+  dateTick,
+  insightsPath,
+  type RangeKey,
+  RangeTabs,
+  rangeLabel,
+} from "../insights";
 
 type SleepDetail = NonNullable<Dashboard["sleep"]>;
 type StageSegment = SleepDetail["stages"][number];
@@ -26,6 +41,12 @@ export function SleepOverview({
   date: string;
   onDateChange: (date: string) => void;
 }) {
+  const [range, setRange] = useState<RangeKey>("day");
+  const insights = useQuery({
+    queryKey: ["insights", range, date],
+    queryFn: () => api<Insights>(insightsPath(date, range)),
+    enabled: range !== "day",
+  });
   const detail = data.sleep;
   const sessions = data.timeline.filter((item) => item.kind === "sleep");
 
@@ -49,79 +70,199 @@ export function SleepOverview({
         title="Sleep"
       />
 
-      {detail ? (
+      <RangeTabs onChange={setRange} value={range} />
+
+      {range === "day" ? (
         <>
-          <SleepHero detail={detail} timezone={data.timezone} />
-          <SleepTimeline detail={detail} timezone={data.timezone} />
-          <SleepFacts detail={detail} />
+          {detail ? (
+            <>
+              <SleepHero detail={detail} timezone={data.timezone} />
+              <SleepTimeline detail={detail} timezone={data.timezone} />
+              <SleepFacts detail={detail} />
+            </>
+          ) : (
+            <Card variant="secondary">
+              <Card.Content>
+                <EmptyContent
+                  description="Try syncing Google Health or selecting another date."
+                  icon="☾"
+                  title="No sleep session synced"
+                />
+              </Card.Content>
+            </Card>
+          )}
+          <SleepSessions sessions={sessions} timezone={data.timezone} />
         </>
       ) : (
-        <Card variant="secondary">
-          <Card.Content>
-            <EmptyContent
-              description="Try syncing Google Health or selecting another date."
-              icon="☾"
-              title="No sleep session synced"
-            />
-          </Card.Content>
-        </Card>
+        <>
+          {insights.isPending && (
+            <Card variant="secondary">
+              <Card.Content className="min-h-80 animate-pulse" />
+            </Card>
+          )}
+          {insights.isError && (
+            <AppAlert message={insights.error.message} title="Sleep history unavailable" />
+          )}
+          {insights.data && <SleepTrendCard insights={insights.data} range={range} />}
+        </>
       )}
+    </div>
+  );
+}
 
-      <Card variant="secondary" aria-labelledby="sessions-title">
+function SleepTrendCard({ insights, range }: { insights: Insights; range: RangeKey }) {
+  const [metric, setMetric] = useState<"duration" | "efficiency" | "deep">("duration");
+  const metricConfig = {
+    duration: {
+      label: "Total sleep",
+      unit: "",
+      value: (point: Insights["sleep"][number]) => point.minutesAsleep,
+      format: formatMinutesNumber,
+    },
+    efficiency: {
+      label: "Sleep efficiency",
+      unit: "",
+      value: (point: Insights["sleep"][number]) => point.sleepEfficiency,
+      format: (value: number) => `${Math.round(value)}%`,
+    },
+    deep: {
+      label: "Deep sleep",
+      unit: "",
+      value: (point: Insights["sleep"][number]) => point.minutesDeep,
+      format: formatMinutesNumber,
+    },
+  }[metric];
+  const chartData = insights.sleep.map((point) => ({
+    label: dateTick(point.date, range),
+    value: metricConfig.value(point),
+    detail: new Date(`${point.date}T12:00:00Z`).toLocaleDateString([], {
+      dateStyle: "full",
+    }),
+  }));
+  const values = chartData
+    .map((point) => point.value)
+    .filter((value): value is number => value != null);
+  const average = values.length
+    ? values.reduce((sum, value) => sum + value, 0) / values.length
+    : null;
+
+  return (
+    <>
+      <Card variant="default" aria-labelledby="sleep-trend-title">
         <Card.Header>
           <SectionHeader
             action={
-              <Chip size="sm" variant="soft">
-                <Chip.Label>{sessions.length} sessions</Chip.Label>
+              <Chip color="success" size="sm" variant="soft">
+                <Chip.Label>{insights.freshness}</Chip.Label>
               </Chip>
             }
-            eyebrow="Selected day"
-            id="sessions-title"
-            title="Sleep sessions"
+            eyebrow={rangeLabel(insights)}
+            id="sleep-trend-title"
+            title={metricConfig.label}
+          />
+        </Card.Header>
+        <Card.Content className="grid gap-6">
+          <div className="flex flex-wrap items-end gap-2">
+            <span className="text-5xl font-bold tracking-[-0.04em] tabular-nums max-sm:text-4xl">
+              {average == null ? "—" : metricConfig.format(average)}
+            </span>
+            <span className="pb-1 text-sm font-semibold text-muted">per recorded night</span>
+          </div>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Sleep chart metric">
+            {[
+              ["duration", "Total sleep"],
+              ["efficiency", "Efficiency"],
+              ["deep", "Deep sleep"],
+            ].map(([key, label]) => (
+              <button
+                aria-pressed={metric === key}
+                className={`min-h-10 rounded-xl border px-4 text-sm font-semibold transition-colors ${
+                  metric === key
+                    ? "border-[var(--info)] bg-[var(--info)] text-[var(--canvas)]"
+                    : "border-[var(--border-strong)] text-muted hover:text-foreground"
+                }`}
+                key={key}
+                onClick={() => setMetric(key as "duration" | "efficiency" | "deep")}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {chartData.length ? (
+            <EvilAnimatedLineChart
+              data={chartData}
+              formatValue={metricConfig.format}
+              reference={average ?? undefined}
+              valueLabel={metricConfig.unit}
+            />
+          ) : (
+            <EmptyContent
+              description="Sync Google Health or choose another date range."
+              title="No sleep data in this range"
+            />
+          )}
+        </Card.Content>
+      </Card>
+
+      <Card variant="secondary" aria-labelledby="sleep-nights-title">
+        <Card.Header>
+          <SectionHeader
+            action={
+              <Chip size="sm" variant="tertiary">
+                <Chip.Label>{insights.sleep.length} nights</Chip.Label>
+              </Chip>
+            }
+            eyebrow="Recorded sessions"
+            id="sleep-nights-title"
+            title="Nightly sleep"
           />
         </Card.Header>
         <Card.Content>
-          {sessions.length ? (
+          {insights.sleep.length ? (
             <ol className="grid">
-              {sessions.map((session) => (
+              {[...insights.sleep].reverse().slice(0, 14).map((point) => (
                 <li
-                  className="grid grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 border-b border-separator py-3 last:border-0 max-sm:grid-cols-[36px_minmax(0,1fr)]"
-                  key={session.id}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-separator py-3 last:border-0"
+                  key={point.date}
                 >
-                  <Surface
-                    className="grid size-9 place-items-center rounded-full text-lg text-accent"
-                    variant="tertiary"
-                    aria-hidden="true"
-                  >
-                    ☾
-                  </Surface>
-                  <div className="min-w-0">
-                    <Typography weight="semibold">{session.title}</Typography>
-                    <Typography.Paragraph color="muted" size="xs">
-                      {session.detail ?? "Sleep session"}
-                    </Typography.Paragraph>
-                  </div>
-                  <div className="text-right max-sm:col-start-2 max-sm:text-left">
-                    <time className="block text-xs tabular-nums" dateTime={session.occurredAt}>
-                      {formatTime(session.occurredAt, data.timezone)}
+                  <div>
+                    <time className="text-sm text-muted" dateTime={point.date}>
+                      {new Date(`${point.date}T12:00:00Z`).toLocaleDateString([], {
+                        day: "numeric",
+                        month: "short",
+                        weekday: "short",
+                      })}
                     </time>
-                    <Typography color="muted" type="body-xs">
-                      {session.source}
-                    </Typography>
+                    <div className="mt-1 text-xs text-muted">
+                      {formatTime(point.startAt, insights.timezone)}–
+                      {formatTime(point.endAt, insights.timezone)}
+                    </div>
                   </div>
+                  <Typography className="tabular-nums" weight="semibold">
+                    {formatMinutes(point.minutesAsleep)}
+                  </Typography>
                 </li>
               ))}
             </ol>
           ) : (
             <EmptyContent
-              description="No additional sessions were found for this date."
-              icon="☾"
-              title="No session in timeline"
+              description="Google Health has no sleep sessions for this range."
+              title="No recorded nights"
             />
           )}
         </Card.Content>
       </Card>
-    </div>
+
+      <Surface className="flex flex-wrap justify-between gap-2 p-4" variant="tertiary">
+        <Typography color="muted" type="body-xs">
+          {insights.source} · {insights.derivation}
+        </Typography>
+        <Typography color="muted" type="body-xs">
+          Missing nights are not treated as zero.
+        </Typography>
+      </Surface>
+    </>
   );
 }
 
@@ -253,6 +394,7 @@ function StageTrack({
   segments: StageSegment[];
   start: number;
 }) {
+  const reduceMotion = useReducedMotion();
   const duration = Math.max(end - start, 1);
   return (
     <div
@@ -266,13 +408,21 @@ function StageTrack({
         const left = Math.max(0, ((segmentStart - start) / duration) * 100);
         const width = Math.max(0.35, ((segmentEnd - segmentStart) / duration) * 100);
         return (
-          <span
+          <motion.span
+            animate={{ opacity: 1, scaleX: 1 }}
             className="absolute inset-y-0 rounded-md"
+            initial={reduceMotion ? false : { opacity: 0.35, scaleX: 0 }}
             key={`${segment.startAt}-${index}`}
             style={{
               backgroundColor: color,
               left: `${left}%`,
+              originX: 0,
               width: `${Math.min(width, 100 - left)}%`,
+            }}
+            transition={{
+              delay: reduceMotion ? 0 : Math.min(index * 0.035, 0.5),
+              duration: reduceMotion ? 0 : 0.35,
+              ease: [0, 0.7, 0.5, 1],
             }}
           />
         );
@@ -323,6 +473,71 @@ function SleepFacts({ detail }: { detail: SleepDetail }) {
   );
 }
 
+function SleepSessions({
+  sessions,
+  timezone,
+}: {
+  sessions: Dashboard["timeline"];
+  timezone: string;
+}) {
+  return (
+    <Card variant="secondary" aria-labelledby="sessions-title">
+      <Card.Header>
+        <SectionHeader
+          action={
+            <Chip size="sm" variant="soft">
+              <Chip.Label>{sessions.length} sessions</Chip.Label>
+            </Chip>
+          }
+          eyebrow="Selected day"
+          id="sessions-title"
+          title="Sleep sessions"
+        />
+      </Card.Header>
+      <Card.Content>
+        {sessions.length ? (
+          <ol className="grid">
+            {sessions.map((session) => (
+              <li
+                className="grid grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 border-b border-separator py-3 last:border-0 max-sm:grid-cols-[36px_minmax(0,1fr)]"
+                key={session.id}
+              >
+                <Surface
+                  className="grid size-9 place-items-center rounded-full text-lg text-accent"
+                  variant="tertiary"
+                  aria-hidden="true"
+                >
+                  ☾
+                </Surface>
+                <div className="min-w-0">
+                  <Typography weight="semibold">{session.title}</Typography>
+                  <Typography.Paragraph color="muted" size="xs">
+                    {session.detail ?? "Sleep session"}
+                  </Typography.Paragraph>
+                </div>
+                <div className="text-right max-sm:col-start-2 max-sm:text-left">
+                  <time className="block text-xs tabular-nums" dateTime={session.occurredAt}>
+                    {formatTime(session.occurredAt, timezone)}
+                  </time>
+                  <Typography color="muted" type="body-xs">
+                    {session.source}
+                  </Typography>
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <EmptyContent
+            description="No additional sessions were found for this date."
+            icon="☾"
+            title="No session in timeline"
+          />
+        )}
+      </Card.Content>
+    </Card>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <Surface className="grid gap-1.5 p-4" variant="tertiary">
@@ -342,6 +557,10 @@ function formatMinutes(value: number | null | undefined): string {
 
 function formatPercent(value: number | null | undefined): string {
   return value == null ? "Unavailable" : `${Math.round(value)}%`;
+}
+
+function formatMinutesNumber(value: number): string {
+  return formatMinutes(Math.round(value));
 }
 
 function formatTime(value: string, timezone: string): string {
