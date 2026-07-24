@@ -14,7 +14,7 @@ from src.core.config import Settings
 from src.core.time import utc_now
 from src.modules.google_health.crypto import TokenCipher
 from src.modules.google_health.models import GoogleHealthConnection
-from src.modules.google_health.registry import DataType, FetchMethod
+from src.modules.google_health.registry import DataType, FetchMethod, FilterValueFormat
 
 MAX_REQUEST_ATTEMPTS = 5
 MAX_RETRY_DELAY_SECONDS = 60.0
@@ -172,11 +172,18 @@ class GoogleHealthClient:
         while True:
             params: dict[str, Any] = {"pageSize": data_type.page_size}
             if data_type.filter_field:
-                next_day = (end + timedelta(days=1)).isoformat()
-                params["filter"] = (
-                    f'{data_type.filter_field} >= "{start.isoformat()}" '
-                    f'AND {data_type.filter_field} < "{next_day}"'
-                )
+                start_value = _filter_value(start, data_type.filter_value_format)
+                if data_type.filter_upper_bound:
+                    end_value = _filter_value(
+                        end + timedelta(days=1),
+                        data_type.filter_value_format,
+                    )
+                    params["filter"] = (
+                        f'{data_type.filter_field} >= "{start_value}" '
+                        f'AND {data_type.filter_field} < "{end_value}"'
+                    )
+                else:
+                    params["filter"] = f'{data_type.filter_field} >= "{start_value}"'
             if token:
                 params["pageToken"] = token
             data = await self.request(
@@ -227,6 +234,13 @@ class GoogleHealthClient:
 
 def _date_json(value: date) -> dict[str, int]:
     return {"year": value.year, "month": value.month, "day": value.day}
+
+
+def _filter_value(value: date, value_format: FilterValueFormat) -> str:
+    if value_format is FilterValueFormat.DATE:
+        return value.isoformat()
+    suffix = "T00:00:00Z" if value_format is FilterValueFormat.RFC3339 else "T00:00:00"
+    return f"{value.isoformat()}{suffix}"
 
 
 def _objects(value: Any) -> list[dict[str, Any]]:

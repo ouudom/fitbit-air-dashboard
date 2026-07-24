@@ -36,6 +36,7 @@ from src.modules.google_health.scheduling import (
 
 LEASE_DURATION = timedelta(minutes=15)
 SOFT_DELETE_RETENTION = timedelta(days=30)
+PAGE_TOKEN_RESET_FAILURE_THRESHOLD = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +225,7 @@ class SyncService:
                 job.error = str(exc)
                 job.lease_until = None
                 job.consecutive_failures += 1
+                _reset_stuck_page(job)
                 job.next_poll_at = next_failure_poll(utc_now(), job.consecutive_failures, timezone)
                 await self.db.commit()
             raise
@@ -384,6 +386,13 @@ class SyncService:
             .values(deleted_at=utc_now())
         )
         await self.db.execute(statement)
+
+
+def _reset_stuck_page(job: GoogleHealthSyncJob) -> None:
+    if job.next_page_token and job.consecutive_failures >= PAGE_TOKEN_RESET_FAILURE_THRESHOLD:
+        job.next_page_token = None
+        job.range_start = None
+        job.range_end = None
 
 
 async def purge_soft_deleted_records(

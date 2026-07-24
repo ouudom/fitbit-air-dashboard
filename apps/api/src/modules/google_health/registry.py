@@ -25,6 +25,12 @@ class PollingTier(StrEnum):
     RECENT_EVENT = "recent_event"
 
 
+class FilterValueFormat(StrEnum):
+    DATE = "date"
+    CIVIL_DATETIME = "civil_datetime"
+    RFC3339 = "rfc3339"
+
+
 ACTIVITY_SCOPE = "googlehealth.activity_and_fitness.readonly"
 ECG_SCOPE = "googlehealth.ecg.readonly"
 HEALTH_SCOPE = "googlehealth.health_metrics_and_measurements.readonly"
@@ -111,6 +117,8 @@ class DataType:
     fetch_method: FetchMethod
     supported_operations: tuple[str, ...]
     filter_field: str | None
+    filter_value_format: FilterValueFormat
+    filter_upper_bound: bool
     page_size: int
     maximum_range_days: int
     polling_tier: PollingTier
@@ -152,14 +160,14 @@ def _type(
     fetch_method: FetchMethod = FetchMethod.RECONCILE,
     tier: PollingTier = PollingTier.MEASUREMENT,
     filter_field: str | None = "",
+    filter_value_format: FilterValueFormat | None = None,
+    filter_upper_bound: bool = True,
     true_zero: bool = False,
 ) -> DataType:
     poll_interval, overlap, priority = POLLING_DEFAULTS[tier]
     if endpoint_id in {"sleep", "exercise"}:
         page_size = 25
-    elif endpoint_id == "calories-in-heart-rate-zone":
-        # Google caps the daily rollup page window at window_size_days * page_size <= 14
-        # for this data type specifically.
+    elif fetch_method is FetchMethod.DAILY_ROLLUP and endpoint_id in CONSTRAINED_RANGE_TYPES:
         page_size = 14
     else:
         page_size = 1000
@@ -170,6 +178,9 @@ def _type(
     if endpoint_id == "exercise":
         supported_operations.append("export_exercise_tcx")
     resolved_filter = _filter(payload_field, kind) if filter_field == "" else filter_field
+    resolved_filter_format = filter_value_format or (
+        FilterValueFormat.DATE if kind is RecordKind.DAILY else FilterValueFormat.CIVIL_DATETIME
+    )
     return DataType(
         endpoint_id=endpoint_id,
         payload_field=payload_field,
@@ -178,6 +189,8 @@ def _type(
         fetch_method=fetch_method,
         supported_operations=tuple(dict.fromkeys(supported_operations)),
         filter_field=resolved_filter,
+        filter_value_format=resolved_filter_format,
+        filter_upper_bound=filter_upper_bound,
         page_size=page_size,
         maximum_range_days=maximum_range_days,
         polling_tier=tier,
@@ -304,11 +317,9 @@ DATA_TYPES = (
         ECG_SCOPE,
         fetch_method=FetchMethod.LIST,
         tier=PollingTier.RARE,
-        # Google only supports a start_time >= filter for ECG (no civil_ prefix, no
-        # upper bound), which the generic AND-range filter builder can't produce.
-        # Skip server-side filtering, matching the existing food/food-measurement-unit
-        # pattern; ECG polls infrequently (RARE tier) so an unfiltered fetch is cheap.
-        filter_field=None,
+        filter_field="electrocardiogram.interval.start_time",
+        filter_value_format=FilterValueFormat.RFC3339,
+        filter_upper_bound=False,
     ),
     _type(
         "exercise",
