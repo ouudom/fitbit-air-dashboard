@@ -1,4 +1,5 @@
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -17,7 +18,6 @@ class Settings(BaseSettings):
     token_encryption_key: str = ""
     app_key: str = ""
     mcp_public_url: str = "http://localhost:8001/mcp"
-    mcp_oauth_issuer_url: str = "http://localhost:8001"
     google_client_id: str = ""
     google_client_secret: str = ""
     redirect_uri: str = "http://localhost:3000/api/v1/oauth/google-health/callback"
@@ -63,6 +63,21 @@ class Settings(BaseSettings):
             raise ValueError("LOG_LEVEL must be DEBUG, INFO, WARNING, ERROR, or CRITICAL")
         return normalized
 
+    @field_validator("mcp_public_url")
+    @classmethod
+    def validate_mcp_public_url(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if (
+            not parsed.scheme
+            or not parsed.netloc
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("MCP_PUBLIC_URL must be an absolute URL without query or fragment")
+        return value
+
     @model_validator(mode="after")
     def validate_production_configuration(self) -> "Settings":
         if self.app_env != "production":
@@ -92,9 +107,6 @@ class Settings(BaseSettings):
             raise ValueError("REDIRECT_URI must use HTTPS in production")
         if not self.mcp_public_url.startswith("https://"):
             raise ValueError("MCP_PUBLIC_URL must use HTTPS in production")
-        if not self.mcp_oauth_issuer_url.startswith("https://"):
-            raise ValueError("MCP_OAUTH_ISSUER_URL must use HTTPS in production")
-
         if self.google_health_webhook_enabled:
             webhook_required = {
                 "GOOGLE_CLOUD_PROJECT_NUMBER": self.google_cloud_project_number,
