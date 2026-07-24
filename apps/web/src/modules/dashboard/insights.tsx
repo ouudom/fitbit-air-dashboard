@@ -76,6 +76,38 @@ export function displaysMissingDays(range: RangeKey): boolean {
   return range === "week" || range === "month" || range === "quarter";
 }
 
+export function emptyChartSeries(
+  start: string,
+  end: string,
+  range: RangeKey,
+): Array<{ label: string; value: null }> {
+  if (range === "day") {
+    return ["12 AM", "6 AM", "12 PM", "6 PM"].map((label) => ({
+      label,
+      value: null,
+    }));
+  }
+
+  if (range === "year") {
+    const cursor = parseDate(start);
+    const last = parseDate(end);
+    const series: Array<{ label: string; value: null }> = [];
+    while (cursor <= last) {
+      series.push({
+        label: cursor.toLocaleDateString([], { month: "short" }),
+        value: null,
+      });
+      cursor.setUTCMonth(cursor.getUTCMonth() + 1, 1);
+    }
+    return series;
+  }
+
+  return completeDailySeries([], start, end).map((point) => ({
+    label: dateTick(point.date, range),
+    value: null,
+  }));
+}
+
 export function RangeTabs({
   onChange,
   value,
@@ -126,45 +158,55 @@ export function DateRangeControls({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <RangeTabs onChange={onRangeChange} value={range} />
-      <div
-        aria-label="Chart period"
-        className="flex min-h-12 items-stretch overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-raised)]"
-        role="group"
-      >
-        <button
-          aria-label={`Previous ${range}`}
-          className="grid min-w-11 place-items-center text-muted transition-colors hover:bg-[var(--surface-inset)] hover:text-foreground"
-          onClick={() => onEndChange(adjacentRangeEnd(end, range, -1, max))}
-          title={`Previous ${range}`}
-          type="button"
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          aria-label="Chart period"
+          className="flex min-h-12 items-stretch overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-raised)]"
+          role="group"
         >
-          <ChevronLeft aria-hidden="true" className="size-5" />
-        </button>
-        <label className="relative flex min-w-44 cursor-pointer items-center justify-center gap-2 border-x border-[var(--border)] px-4 text-sm font-semibold hover:bg-[var(--surface-inset)]">
-          <CalendarDays aria-hidden="true" className="size-4 text-muted" />
-          <span>{periodLabel(end, range)}</span>
-          <input
-            aria-label="Select chart end date"
-            className="absolute inset-0 cursor-pointer opacity-0"
-            max={max}
-            onChange={(event) => {
-              if (event.target.value) {
-                onEndChange(calendarRangeEnd(event.target.value, range, max));
-              }
-            }}
-            type="date"
-            value={end}
-          />
-        </label>
+          <button
+            aria-label={`Previous ${range}`}
+            className="grid min-w-11 place-items-center text-muted transition-colors hover:bg-[var(--surface-inset)] hover:text-foreground"
+            onClick={() => onEndChange(adjacentRangeEnd(end, range, -1, max))}
+            title={`Previous ${range}`}
+            type="button"
+          >
+            <ChevronLeft aria-hidden="true" className="size-5" />
+          </button>
+          <label className="relative flex min-w-44 cursor-pointer items-center justify-center gap-2 border-x border-[var(--border)] px-4 text-sm font-semibold hover:bg-[var(--surface-inset)]">
+            <CalendarDays aria-hidden="true" className="size-4 text-muted" />
+            <span>{periodLabel(end, range)}</span>
+            <input
+              aria-label="Select chart end date"
+              className="absolute inset-0 cursor-pointer opacity-0"
+              max={max}
+              onChange={(event) => {
+                if (event.target.value) {
+                  onEndChange(calendarRangeEnd(event.target.value, range, max));
+                }
+              }}
+              type="date"
+              value={end}
+            />
+          </label>
+          <button
+            aria-label={`Next ${range}`}
+            className="grid min-w-11 place-items-center text-muted transition-colors enabled:hover:bg-[var(--surface-inset)] enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={!canMoveNext}
+            onClick={() => onEndChange(adjacentRangeEnd(end, range, 1, max))}
+            title={`Next ${range}`}
+            type="button"
+          >
+            <ChevronRight aria-hidden="true" className="size-5" />
+          </button>
+        </div>
         <button
-          aria-label={`Next ${range}`}
-          className="grid min-w-11 place-items-center text-muted transition-colors enabled:hover:bg-[var(--surface-inset)] enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          className="min-h-12 rounded-xl border border-[var(--border-strong)] bg-[var(--surface-raised)] px-4 text-sm font-semibold text-muted transition-colors enabled:hover:bg-[var(--surface-inset)] enabled:hover:text-foreground disabled:cursor-default disabled:opacity-50"
           disabled={!canMoveNext}
-          onClick={() => onEndChange(adjacentRangeEnd(end, range, 1, max))}
-          title={`Next ${range}`}
+          onClick={() => onEndChange(max)}
           type="button"
         >
-          <ChevronRight aria-hidden="true" className="size-5" />
+          Current
         </button>
       </div>
     </div>

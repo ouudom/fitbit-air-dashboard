@@ -23,6 +23,7 @@ type ChartDatum = {
 
 type CommonChartProps = {
   data: ChartDatum[];
+  emptyMessage?: string;
   formatValue: (value: number) => string;
   valueLabel: string;
 };
@@ -40,6 +41,7 @@ const axisStyle = { fill: "var(--text-muted)", fontSize: 11 };
 
 export function EvilAnimatedBarChart({
   data,
+  emptyMessage,
   fill = "var(--steps)",
   formatValue,
   goal,
@@ -50,7 +52,7 @@ export function EvilAnimatedBarChart({
   return (
     <motion.div
       animate={{ opacity: 1, y: 0 }}
-      className="h-72 w-full"
+      className="relative h-72 w-full"
       initial={reduceMotion ? false : { opacity: 0, y: 8 }}
       transition={{ duration: 0.35, ease: [0, 0.7, 0.5, 1] }}
     >
@@ -112,12 +114,20 @@ export function EvilAnimatedBarChart({
           />
         </BarChart>
       </ResponsiveContainer>
+      {emptyMessage && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center">
+          <span className="rounded-lg bg-[var(--surface-raised)]/90 px-3 py-2 text-sm font-medium text-muted">
+            {emptyMessage}
+          </span>
+        </div>
+      )}
     </motion.div>
   );
 }
 
 export function EvilAnimatedLineChart({
   data,
+  emptyMessage,
   formatValue,
   reference,
   valueLabel,
@@ -127,7 +137,7 @@ export function EvilAnimatedLineChart({
   return (
     <motion.div
       animate={{ opacity: 1, y: 0 }}
-      className="h-72 w-full"
+      className="relative h-72 w-full"
       initial={reduceMotion ? false : { opacity: 0, y: 8 }}
       transition={{ duration: 0.35, ease: [0, 0.7, 0.5, 1] }}
     >
@@ -200,6 +210,13 @@ export function EvilAnimatedLineChart({
           />
         </LineChart>
       </ResponsiveContainer>
+      {emptyMessage && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center">
+          <span className="rounded-lg bg-[var(--surface-raised)]/90 px-3 py-2 text-sm font-medium text-muted">
+            {emptyMessage}
+          </span>
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -16,6 +16,7 @@ import {
   calendarRangeEnd,
   DateRangeControls,
   dateTick,
+  emptyChartSeries,
   insightsPath,
   type RangeKey,
   rangeLabel,
@@ -86,7 +87,7 @@ export function SleepOverview({
             <>
               <SleepHero detail={detail} timezone={dayData.timezone} />
               <SleepTimeline detail={detail} timezone={dayData.timezone} />
-              <SleepingHeartRate detail={detail} timezone={dayData.timezone} />
+              {/* <SleepingHeartRate detail={detail} timezone={dayData.timezone} /> */}
               <SleepFacts detail={detail} />
             </>
           ) : (
@@ -198,19 +199,17 @@ function SleepTrendCard({ insights, range }: { insights: Insights; range: RangeK
               </button>
             ))}
           </div>
-          {chartData.length ? (
-            <EvilAnimatedLineChart
-              data={chartData}
-              formatValue={metricConfig.format}
-              reference={average ?? undefined}
-              valueLabel={metricConfig.unit}
-            />
-          ) : (
-            <EmptyContent
-              description="Sync Google Health or choose another date range."
-              title="No sleep data in this range"
-            />
-          )}
+          {/* <EvilAnimatedLineChart
+            data={
+              chartData.length
+                ? chartData
+                : emptyChartSeries(insights.start, insights.end, range)
+            }
+            emptyMessage={chartData.length ? undefined : "No sleep data in this range"}
+            formatValue={metricConfig.format}
+            reference={average ?? undefined}
+            valueLabel={metricConfig.unit}
+          /> */}
         </Card.Content>
       </Card>
 
