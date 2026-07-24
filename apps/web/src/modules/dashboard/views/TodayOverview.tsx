@@ -71,17 +71,7 @@ export function TodayOverview({
 
       {syncError && <AppAlert message={syncError} title="Sync failed" />}
 
-      <section aria-labelledby="signals-title">
-        <SectionHeader
-          action={
-            <Chip size="sm" variant="soft">
-              <Chip.Label>{data.timezone}</Chip.Label>
-            </Chip>
-          }
-          eyebrow="Daily data"
-          id="signals-title"
-          title="Primary signals"
-        />
+      <section aria-label="Daily health signals">
         <div className="grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-sm:grid-cols-1">
           {data.metrics.map((metric) => (
             <MetricCard

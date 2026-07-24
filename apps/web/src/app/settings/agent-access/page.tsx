@@ -1,5 +1,5 @@
-import { DashboardRoute } from "@/modules/dashboard/DashboardRoute";
+import { redirect } from "next/navigation";
 
 export default function AgentAccessPage() {
-  return <DashboardRoute view="agents" />;
+  redirect("/settings#agent-access");
 }

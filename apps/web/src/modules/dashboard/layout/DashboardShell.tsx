@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppButton } from "@/components/ui/AppButton";
 
-export type DashboardView = "overview" | "sleep" | "agents";
+export type DashboardView = "overview" | "sleep" | "settings";
 
 type DashboardShellProps = {
   activeView: DashboardView;
@@ -59,15 +59,6 @@ export function DashboardShell({
 
           <Separator />
 
-          <div className="grid gap-2 p-5" aria-label={`Google Health status: ${syncLabel}`}>
-            <Typography color="muted" type="body-xs">
-              Google Health
-            </Typography>
-            <Chip color="success" size="sm" variant="soft">
-              <Chip.Label>{syncLabel}</Chip.Label>
-            </Chip>
-          </div>
-
           <nav className="grid flex-1 content-start gap-1 px-3 py-2" aria-label="Primary">
             {navigation.map((item) => (
               <Link
@@ -86,14 +77,14 @@ export function DashboardShell({
 
           <div className="px-3 pb-3">
             <Link
-              aria-current={activeView === "agents" ? "page" : undefined}
-              className={navigationClass(activeView === "agents")}
-              href="/settings/agent-access"
+              aria-current={activeView === "settings" ? "page" : undefined}
+              className={navigationClass(activeView === "settings")}
+              href="/settings"
             >
               <span className="text-lg" aria-hidden="true">
-                ⌘
+                ⚙
               </span>
-              Agent access
+              Settings
             </Link>
           </div>
 
@@ -138,10 +129,10 @@ export function DashboardShell({
         </Chip>
         <Link
           className="grid size-10 place-items-center rounded-xl text-lg text-muted hover:bg-surface-tertiary"
-          aria-label="Agent access"
-          href="/settings/agent-access"
+          aria-label="Settings"
+          href="/settings"
         >
-          ⌘
+          ⚙
         </Link>
       </Surface>
 

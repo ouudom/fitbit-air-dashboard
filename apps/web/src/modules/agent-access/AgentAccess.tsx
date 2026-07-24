@@ -7,7 +7,6 @@ import { AppAlert } from "@/components/ui/AppAlert";
 import { AppButton } from "@/components/ui/AppButton";
 import { AppTextField } from "@/components/ui/AppTextField";
 import { EmptyContent } from "@/components/ui/EmptyContent";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { api } from "@/lib/api";
 import type { AgentScope, McpToken, IssuedMcpToken } from "@/lib/types";
@@ -193,13 +192,7 @@ export function AgentAccess() {
   }
 
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-6">
-      <PageHeader
-        description="Create scoped credentials for any Streamable HTTP MCP client."
-        eyebrow="Account utility"
-        title="Agent access"
-      />
-
+    <div className="grid gap-6">
       {issued && (
         <Card variant="default" aria-labelledby="new-token-title">
           <Card.Header>

@@ -7,7 +7,7 @@ import { AppAlert } from "@/components/ui/AppAlert";
 import { AppButton } from "@/components/ui/AppButton";
 import { api } from "@/lib/api";
 import type { Dashboard } from "@/lib/types";
-import { AgentAccess } from "@/modules/agent-access/AgentAccess";
+import { Settings } from "@/modules/settings/Settings";
 import { DashboardShell, type DashboardView } from "./layout/DashboardShell";
 import { SleepOverview } from "./views/SleepOverview";
 import { TodayOverview } from "./views/TodayOverview";
@@ -15,6 +15,11 @@ import { TodayOverview } from "./views/TodayOverview";
 type IntegrationStatus = {
   connected: boolean;
   status: string;
+  grantedScopes: string[];
+  enabledDataTypes: number;
+  totalDataTypes: number;
+  lastVerifiedAt?: string | null;
+  tokenExpiresAt?: string | null;
 };
 
 export function TodayDashboard({ email, view }: { email: string; view: DashboardView }) {
@@ -78,7 +83,7 @@ export function TodayDashboard({ email, view }: { email: string; view: Dashboard
       onLogout={() => logout.mutate()}
       syncLabel={syncLabel}
     >
-      {view !== "agents" && dashboard.isPending && (
+      {dashboard.isPending && (
         <section
           className="grid min-h-[calc(100vh-8rem)] place-content-center justify-items-center gap-3"
           aria-live="polite"
@@ -90,7 +95,7 @@ export function TodayDashboard({ email, view }: { email: string; view: Dashboard
         </section>
       )}
 
-      {view !== "agents" && dashboard.isError && (
+      {dashboard.isError && (
         <section className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-lg place-content-center gap-4">
           <AppAlert message={dashboard.error.message} title="Dashboard unavailable" />
           <AppButton onPress={() => dashboard.refetch()} tone="secondary">
@@ -116,7 +121,18 @@ export function TodayDashboard({ email, view }: { email: string; view: Dashboard
         <SleepOverview data={data} date={selectedDate} onDateChange={setDate} />
       )}
 
-      {view === "agents" && <AgentAccess />}
+      {data && view === "settings" && (
+        <Settings
+          dashboard={data}
+          email={email}
+          integration={integration.data}
+          integrationError={integration.error?.message}
+          integrationLoading={integration.isPending}
+          onSync={() => sync.mutate()}
+          syncError={sync.error?.message}
+          syncing={sync.isPending || Boolean(syncRunning)}
+        />
+      )}
     </DashboardShell>
   );
 }
