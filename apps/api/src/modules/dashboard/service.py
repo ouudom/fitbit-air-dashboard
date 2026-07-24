@@ -71,7 +71,7 @@ class DashboardService:
             )
             .where(
                 GoogleHealthConnection.user_id == user_id,
-                GoogleHealthRecord.data_type.in_(("steps", "sleep")),
+                GoogleHealthRecord.data_type.in_(("steps", "sleep", "hydration-log")),
                 GoogleHealthRecord.deleted_at.is_(None),
                 or_(
                     GoogleHealthRecord.record_date.between(start, end),
@@ -97,9 +97,10 @@ class DashboardService:
             user_id,
             day,
             timezone,
-            ("steps", "sleep"),
+            ("steps", "sleep", "hydration-log"),
         )
         step_records = [record for record in records if record.data_type == "steps"]
+        water_records = [record for record in records if record.data_type == "hydration-log"]
         steps = sum(
             value
             for record in step_records
@@ -146,6 +147,22 @@ class DashboardService:
                 "h",
                 day,
                 sleep_updated,
+            ),
+            _metric(
+                "Water",
+                sum(
+                    value
+                    for record in water_records
+                    if (value := _hydration_milliliters(record.raw_payload)) is not None
+                )
+                if water_records
+                else None,
+                "ml",
+                day,
+                max(
+                    (record.last_synced_at for record in water_records),
+                    default=None,
+                ),
             ),
         ]
 
@@ -377,6 +394,8 @@ def _insights_from_records(
 ) -> dict[str, object]:
     steps_by_day: dict[date, int] = {}
     step_buckets: dict[datetime, int] = {}
+    water_by_day: dict[date, float] = {}
+    water_entries: list[dict[str, object]] = []
     sleep_by_day: dict[date, dict[str, object]] = {}
 
     for record in records:
@@ -395,6 +414,25 @@ def _insights_from_records(
                 local_start = record.started_at.astimezone(timezone)
                 bucket = local_start.replace(minute=0, second=0, microsecond=0)
                 step_buckets[bucket] = step_buckets.get(bucket, 0) + integer_value
+            continue
+
+        if record.data_type == "hydration-log":
+            water_value = _hydration_milliliters(record.raw_payload)
+            if water_value is None:
+                continue
+            observed = record.record_date
+            if observed is None and record.started_at is not None:
+                observed = record.started_at.astimezone(timezone).date()
+            if observed is None or not start <= observed <= end:
+                continue
+            water_by_day[observed] = water_by_day.get(observed, 0) + water_value
+            if record.started_at is not None:
+                water_entries.append(
+                    {
+                        "startedAt": record.started_at.astimezone(timezone),
+                        "value": water_value,
+                    }
+                )
             continue
 
         if record.data_type != "sleep":
@@ -435,7 +473,7 @@ def _insights_from_records(
             }
 
     last_synced_at = max((record.last_synced_at for record in records), default=None)
-    available = bool(steps_by_day or sleep_by_day)
+    available = bool(steps_by_day or water_by_day or sleep_by_day)
     return {
         "start": start.isoformat(),
         "end": end.isoformat(),
@@ -452,5 +490,27 @@ def _insights_from_records(
             {"startedAt": started_at, "value": value}
             for started_at, value in sorted(step_buckets.items())
         ],
+        "water": [
+            {"date": observed.isoformat(), "value": value}
+            for observed, value in sorted(water_by_day.items())
+        ],
+        "waterEntries": sorted(water_entries, key=lambda entry: str(entry["startedAt"])),
         "sleep": [point for _, point in sorted(sleep_by_day.items())],
     }
+
+
+def _hydration_milliliters(value: Any) -> float | None:
+    if not isinstance(value, dict):
+        return None
+    for key, nested in value.items():
+        if key == "milliliters" and not isinstance(nested, bool):
+            try:
+                amount = float(nested)
+            except (TypeError, ValueError):
+                return None
+            return amount if amount >= 0 else None
+        if isinstance(nested, dict):
+            nested_amount = _hydration_milliliters(nested)
+            if nested_amount is not None:
+                return nested_amount
+    return None

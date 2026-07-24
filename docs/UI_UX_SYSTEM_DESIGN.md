@@ -24,7 +24,7 @@ Exactly four primary destinations:
 | Today | `/dashboard` | Latest focus metrics, recent sessions, sync freshness |
 | Steps | `/steps` | Daily step totals and activity patterns |
 | Sleep | `/sleep` | Sessions, duration, stages, schedule, supported trends |
-| Health | `/health` | Vitals, heart, measurements, nutrition, hydration |
+| Water intake | `/water-intake` | Hydration logs and intake patterns |
 
 Desktop uses a compact top navigation until content density proves a side rail necessary. Mobile uses a persistent four-item bottom bar. Minimum touch target: `44px × 44px`.
 
@@ -236,7 +236,7 @@ Avoid medical conclusions, motivational pressure, tactical language, and invente
 
 A frontend change is complete when:
 
-- It fits Today, Steps, Sleep, or Health.
+- It fits Today, Steps, Sleep, or Water intake.
 - It uses shared tokens and components.
 - Loading, empty, stale, unsupported, permission, and error states are handled where applicable.
 - Mobile and desktop layouts work.

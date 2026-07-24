@@ -343,6 +343,10 @@ export interface components {
             steps: components["schemas"]["StepsPointResponse"][];
             /** Stepbuckets */
             stepBuckets: components["schemas"]["StepsBucketResponse"][];
+            /** Water */
+            water: components["schemas"]["WaterPointResponse"][];
+            /** Waterentries */
+            waterEntries: components["schemas"]["WaterEntryResponse"][];
             /** Sleep */
             sleep: components["schemas"]["SleepTrendPointResponse"][];
         };
@@ -624,6 +628,23 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** WaterEntryResponse */
+        WaterEntryResponse: {
+            /**
+             * Startedat
+             * Format: date-time
+             */
+            startedAt: string;
+            /** Value */
+            value: number;
+        };
+        /** WaterPointResponse */
+        WaterPointResponse: {
+            /** Date */
+            date: string;
+            /** Value */
+            value: number;
         };
     };
     responses: never;

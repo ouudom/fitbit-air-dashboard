@@ -3,7 +3,11 @@ from types import SimpleNamespace
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from src.modules.dashboard.service import _insights_from_records, _sleep_detail_from_record
+from src.modules.dashboard.service import (
+    _hydration_milliliters,
+    _insights_from_records,
+    _sleep_detail_from_record,
+)
 
 
 def test_sleep_detail_exposes_stages_and_deduplicates_summary() -> None:
@@ -92,6 +96,18 @@ def test_insights_aggregate_steps_and_sleep_by_wake_date() -> None:
             raw_payload={"steps": {"count": {"value": "361"}}},
         ),
         SimpleNamespace(
+            data_type="hydration-log",
+            record_date=None,
+            started_at=datetime(2026, 7, 24, 2, 46, tzinfo=UTC),
+            last_synced_at=datetime(2026, 7, 24, 9, 45, tzinfo=UTC),
+            raw_payload={
+                "hydrationLog": {
+                    "interval": {"startTime": "2026-07-24T02:46:00Z"},
+                    "water": {"volume": {"milliliters": "500"}},
+                }
+            },
+        ),
+        SimpleNamespace(
             id=UUID("5aca88c2-0825-4676-a7c0-4b2c59ff4fb7"),
             data_type="sleep",
             record_date=None,
@@ -133,6 +149,13 @@ def test_insights_aggregate_steps_and_sleep_by_wake_date() -> None:
             "value": 1561,
         }
     ]
+    assert insights["water"] == [{"date": "2026-07-24", "value": 500.0}]
+    assert insights["waterEntries"] == [
+        {
+            "startedAt": datetime(2026, 7, 24, 9, 46, tzinfo=ZoneInfo("Asia/Phnom_Penh")),
+            "value": 500.0,
+        }
+    ]
     assert insights["sleep"] == [
         {
             "date": "2026-07-24",
@@ -147,3 +170,18 @@ def test_insights_aggregate_steps_and_sleep_by_wake_date() -> None:
             "endAt": datetime(2026, 7, 24, 1, 31, tzinfo=UTC),
         }
     ]
+
+
+def test_hydration_milliliters_ignores_unrelated_numbers() -> None:
+    assert (
+        _hydration_milliliters(
+            {
+                "hydrationLog": {
+                    "interval": {"startTime": "2026-07-24T02:46:00Z"},
+                    "water": {"volume": {"milliliters": "375.5"}},
+                }
+            }
+        )
+        == 375.5
+    )
+    assert _hydration_milliliters({"hydrationLog": {"water": {"amount": 500}}}) is None

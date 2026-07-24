@@ -85,6 +85,16 @@ class StepsBucketResponse(BaseModel):
     value: int
 
 
+class WaterPointResponse(BaseModel):
+    date: str
+    value: float
+
+
+class WaterEntryResponse(BaseModel):
+    startedAt: datetime
+    value: float
+
+
 class SleepTrendPointResponse(BaseModel):
     date: str
     minutesAsleep: int | None
@@ -108,4 +118,6 @@ class InsightsResponse(BaseModel):
     availability: str
     steps: list[StepsPointResponse]
     stepBuckets: list[StepsBucketResponse]
+    water: list[WaterPointResponse]
+    waterEntries: list[WaterEntryResponse]
     sleep: list[SleepTrendPointResponse]

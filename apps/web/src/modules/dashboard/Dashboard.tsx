@@ -12,6 +12,7 @@ import { DashboardShell, type DashboardView } from "./layout/DashboardShell";
 import { SleepOverview } from "./views/SleepOverview";
 import { DashboardOverview } from "./views/DashboardOverview";
 import { StepsOverview } from "./views/StepsOverview";
+import { WaterIntakeOverview } from "./views/WaterIntakeOverview";
 
 type IntegrationStatus = {
   connected: boolean;
@@ -122,6 +123,10 @@ export function Dashboard({ email, view }: { email: string; view: DashboardView 
 
       {data && view === "steps" && (
         <StepsOverview date={selectedDate} onDateChange={setDate} />
+      )}
+
+      {data && view === "water-intake" && (
+        <WaterIntakeOverview date={selectedDate} onDateChange={setDate} />
       )}
 
       {data && view === "settings" && (

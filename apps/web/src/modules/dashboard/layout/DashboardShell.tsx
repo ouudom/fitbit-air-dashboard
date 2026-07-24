@@ -2,7 +2,7 @@ import { Avatar, Chip, Separator, Surface, Typography } from "@heroui/react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-export type DashboardView = "overview" | "steps" | "sleep" | "settings";
+export type DashboardView = "overview" | "steps" | "sleep" | "water-intake" | "settings";
 
 type DashboardShellProps = {
   activeView: DashboardView;
@@ -20,6 +20,7 @@ const navigation: Array<{
   { id: "overview", href: "/dashboard", label: "Today", icon: "⌂" },
   { id: "steps", href: "/steps", label: "Steps", icon: "↗" },
   { id: "sleep", href: "/sleep", label: "Sleep", icon: "☾" },
+  { id: "water-intake", href: "/water-intake", label: "Water intake", icon: "◉" },
 ];
 
 function navigationClass(active: boolean): string {
@@ -129,7 +130,7 @@ export function DashboardShell({
       </main>
 
       <Surface
-        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 rounded-none border-t border-border pb-[env(safe-area-inset-bottom)] lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 rounded-none border-t border-border pb-[env(safe-area-inset-bottom)] lg:hidden"
         variant="secondary"
       >
         {navigation.map((item) => (

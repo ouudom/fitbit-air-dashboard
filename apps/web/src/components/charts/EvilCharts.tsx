@@ -40,10 +40,11 @@ const axisStyle = { fill: "var(--text-muted)", fontSize: 11 };
 
 export function EvilAnimatedBarChart({
   data,
+  fill = "var(--steps)",
   formatValue,
   goal,
   valueLabel,
-}: CommonChartProps & { goal?: number }) {
+}: CommonChartProps & { fill?: string; goal?: number }) {
   const reduceMotion = useReducedMotion();
 
   return (
@@ -97,12 +98,16 @@ export function EvilAnimatedBarChart({
           )}
           <Bar
             dataKey="value"
-            fill="var(--steps)"
+            fill={fill}
             isAnimationActive={false}
             maxBarSize={34}
             radius={[9, 9, 3, 3]}
             shape={(props: BarShapeProps) => (
-              <AnimatedBarShape {...props} reduceMotion={Boolean(reduceMotion)} />
+              <AnimatedBarShape
+                {...props}
+                fill={fill}
+                reduceMotion={Boolean(reduceMotion)}
+              />
             )}
           />
         </BarChart>
