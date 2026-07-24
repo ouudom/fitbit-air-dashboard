@@ -386,7 +386,7 @@ DATA_TYPES = (
     _type(
         "nutrition-log",
         "nutritionLog",
-        RecordKind.SAMPLE,
+        RecordKind.SESSION,
         NUTRITION_SCOPE,
         tier=PollingTier.RECENT_EVENT,
     ),

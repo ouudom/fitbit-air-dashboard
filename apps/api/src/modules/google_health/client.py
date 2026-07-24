@@ -151,7 +151,17 @@ class GoogleHealthClient:
                 )
                 await asyncio.sleep(delay)
                 continue
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                detail = _error_detail(response)
+                if detail is None:
+                    raise
+                raise httpx.HTTPStatusError(
+                    f"{exc}; Google Health error: {detail}",
+                    request=exc.request,
+                    response=exc.response,
+                ) from exc
             return dict(response.json()) if response.content else {}
         raise RuntimeError("Google Health request failed")
 
@@ -208,14 +218,16 @@ class GoogleHealthClient:
         while True:
             payload: dict[str, Any] = {
                 "range": {
-                    "start": {"date": _date_json(start), "time": {}},
+                    "start": {
+                        "date": _date_json(start),
+                        "time": _midnight_json(),
+                    },
                     "end": {
                         "date": _date_json(end + timedelta(days=1)),
-                        "time": {},
+                        "time": _midnight_json(),
                     },
                 },
                 "windowSizeDays": 1,
-                "pageSize": data_type.page_size,
                 "dataSourceFamily": "users/me/dataSourceFamilies/all-sources",
             }
             if token:
@@ -234,6 +246,24 @@ class GoogleHealthClient:
 
 def _date_json(value: date) -> dict[str, int]:
     return {"year": value.year, "month": value.month, "day": value.day}
+
+
+def _midnight_json() -> dict[str, int]:
+    return {"hours": 0, "minutes": 0, "seconds": 0, "nanos": 0}
+
+
+def _error_detail(response: httpx.Response) -> str | None:
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    error = payload.get("error")
+    if not isinstance(error, dict):
+        return None
+    message = error.get("message")
+    return message[:500] if isinstance(message, str) and message else None
 
 
 def _filter_value(value: date, value_format: FilterValueFormat) -> str:

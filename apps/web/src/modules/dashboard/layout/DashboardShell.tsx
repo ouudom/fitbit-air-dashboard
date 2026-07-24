@@ -1,7 +1,6 @@
 import { Avatar, Chip, Separator, Surface, Typography } from "@heroui/react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { AppButton } from "@/components/ui/AppButton";
 
 export type DashboardView = "overview" | "steps" | "sleep" | "settings";
 
@@ -9,8 +8,6 @@ type DashboardShellProps = {
   activeView: DashboardView;
   children: ReactNode;
   email: string;
-  logoutPending: boolean;
-  onLogout: () => void;
   syncLabel: string;
 };
 
@@ -38,8 +35,6 @@ export function DashboardShell({
   activeView,
   children,
   email,
-  logoutPending,
-  onLogout,
   syncLabel,
 }: DashboardShellProps) {
   return (
@@ -95,7 +90,7 @@ export function DashboardShell({
             <Avatar size="sm">
               <Avatar.Fallback>{email.charAt(0).toUpperCase()}</Avatar.Fallback>
             </Avatar>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0">
               <Typography className="block" truncate type="body-xs" weight="semibold">
                 {email}
               </Typography>
@@ -103,14 +98,6 @@ export function DashboardShell({
                 Private account
               </Typography>
             </div>
-            <AppButton
-              className="min-h-8 px-2.5"
-              isDisabled={logoutPending}
-              onPress={onLogout}
-              tone="secondary"
-            >
-              {logoutPending ? "Wait…" : "Sign out"}
-            </AppButton>
           </footer>
         </Surface>
       </aside>

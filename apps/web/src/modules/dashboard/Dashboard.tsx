@@ -80,8 +80,6 @@ export function Dashboard({ email, view }: { email: string; view: DashboardView 
     <DashboardShell
       activeView={view}
       email={email}
-      logoutPending={logout.isPending}
-      onLogout={() => logout.mutate()}
       syncLabel={syncLabel}
     >
       {dashboard.isPending && (
@@ -133,6 +131,9 @@ export function Dashboard({ email, view }: { email: string; view: DashboardView 
           integration={integration.data}
           integrationError={integration.error?.message}
           integrationLoading={integration.isPending}
+          logoutError={logout.error?.message}
+          logoutPending={logout.isPending}
+          onLogout={() => logout.mutate()}
           onSync={() => sync.mutate()}
           syncError={sync.error?.message}
           syncing={sync.isPending || Boolean(syncRunning)}

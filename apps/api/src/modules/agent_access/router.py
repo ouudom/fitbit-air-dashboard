@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.capabilities import require_agent_access
 from src.core.config import Settings, get_settings
 from src.core.dependencies import database_session
 from src.core.errors import NotFoundError
@@ -16,7 +17,11 @@ from src.modules.agent_access.schemas import (
 from src.modules.agent_access.service import McpTokenService
 from src.modules.auth.dependencies import Principal, current_principal, require_csrf
 
-router = APIRouter(prefix="/mcp-tokens", tags=["MCP tokens"])
+router = APIRouter(
+    prefix="/mcp-tokens",
+    tags=["MCP tokens"],
+    dependencies=[Depends(require_agent_access)],
+)
 
 
 @router.post("", response_model=IssuedMcpTokenResponse, status_code=status.HTTP_201_CREATED)

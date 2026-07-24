@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from src.core.capabilities import AppCapabilitiesResponse
+
 
 class MetricResponse(BaseModel):
     key: str
@@ -64,6 +66,7 @@ class SleepDetailResponse(BaseModel):
 
 
 class DashboardResponse(BaseModel):
+    capabilities: AppCapabilitiesResponse
     date: str
     timezone: str
     metrics: list[MetricResponse]

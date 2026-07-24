@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.capabilities import app_capabilities
 from src.core.config import Settings
 from src.modules.auth.models import User
 from src.modules.google_health.models import (
@@ -26,6 +27,7 @@ class DashboardService:
         timezone = ZoneInfo(timezone_name or self.settings.app_timezone)
         selected_day = day or datetime.now(timezone).date()
         return {
+            "capabilities": app_capabilities(self.settings),
             "date": selected_day.isoformat(),
             "timezone": timezone.key,
             "metrics": await self._metrics(user_id, selected_day, timezone),

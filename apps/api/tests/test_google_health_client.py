@@ -41,6 +41,29 @@ def test_full_jitter_respects_exponential_ceiling() -> None:
 
 
 @pytest.mark.asyncio
+async def test_request_preserves_google_error_message() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            400,
+            json={"error": {"message": "Invalid filter field"}},
+            request=request,
+        )
+
+    client = GoogleHealthClient(
+        AsyncMock(),
+        Settings(),
+        user_id=1,
+        transport=httpx.MockTransport(handler),
+    )
+    with (
+        patch.object(client, "access_token", AsyncMock(return_value="token")),
+        pytest.raises(httpx.HTTPStatusError, match="Invalid filter field"),
+    ):
+        await client.request("GET", "users/me/dataTypes/nutrition-log/dataPoints:reconcile")
+    await client.close()
+
+
+@pytest.mark.asyncio
 async def test_electrocardiogram_uses_supported_lower_bound_filter() -> None:
     client = GoogleHealthClient(AsyncMock(), Settings(), user_id=1)
     request = AsyncMock(return_value={"dataPoints": []})
@@ -63,7 +86,7 @@ async def test_electrocardiogram_uses_supported_lower_bound_filter() -> None:
 
 
 @pytest.mark.asyncio
-async def test_nutrition_log_uses_explicit_civil_datetime_filter() -> None:
+async def test_nutrition_log_uses_interval_civil_datetime_filter() -> None:
     client = GoogleHealthClient(AsyncMock(), Settings(), user_id=1)
     request = AsyncMock(return_value={"dataPoints": []})
     with patch.object(client, "request", request):
@@ -81,8 +104,8 @@ async def test_nutrition_log_uses_explicit_civil_datetime_filter() -> None:
     assert request.await_args.kwargs["params"] == {
         "pageSize": 1000,
         "filter": (
-            'nutrition_log.sample_time.civil_time >= "2026-07-01T00:00:00" '
-            'AND nutrition_log.sample_time.civil_time < "2026-07-25T00:00:00"'
+            'nutrition_log.interval.civil_start_time >= "2026-07-01T00:00:00" '
+            'AND nutrition_log.interval.civil_start_time < "2026-07-25T00:00:00"'
         ),
     }
 
@@ -125,10 +148,15 @@ async def test_steps_use_one_day_civil_rollups() -> None:
     )
     assert request.await_args.kwargs["json"] == {
         "range": {
-            "start": {"date": {"year": 2026, "month": 7, "day": 23}, "time": {}},
-            "end": {"date": {"year": 2026, "month": 7, "day": 24}, "time": {}},
+            "start": {
+                "date": {"year": 2026, "month": 7, "day": 23},
+                "time": {"hours": 0, "minutes": 0, "seconds": 0, "nanos": 0},
+            },
+            "end": {
+                "date": {"year": 2026, "month": 7, "day": 24},
+                "time": {"hours": 0, "minutes": 0, "seconds": 0, "nanos": 0},
+            },
         },
         "windowSizeDays": 1,
-        "pageSize": 1000,
         "dataSourceFamily": "users/me/dataSourceFamilies/all-sources",
     }

@@ -48,6 +48,11 @@ def test_electrocardiogram_uses_lower_bound_physical_time_filter() -> None:
     assert data_type.filter_upper_bound is False
 
 
+def test_nutrition_log_uses_session_interval_filter() -> None:
+    data_type = DATA_TYPE_REGISTRY["nutrition-log"]
+    assert data_type.filter_field == "nutrition_log.interval.civil_start_time"
+
+
 @pytest.mark.parametrize("data_type", ["sleep", "exercise"])
 def test_session_page_size_is_capped(data_type: str) -> None:
     assert DATA_TYPE_REGISTRY[data_type].page_size == 25

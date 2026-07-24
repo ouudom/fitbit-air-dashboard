@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/v1/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Capabilities */
+        get: operations["capabilities_api_v1_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup": {
         parameters: {
             query?: never;
@@ -271,6 +288,11 @@ export interface components {
          * @enum {string}
          */
         AgentScope: "profile:read" | "today:read" | "fitness:read" | "sleep:read" | "health:read" | "nutrition:read" | "sync:read" | "sync:write" | "integration:read" | "integration:write" | "ecg:read" | "irn:read";
+        /** AppCapabilitiesResponse */
+        AppCapabilitiesResponse: {
+            /** Agentaccessenabled */
+            agentAccessEnabled: boolean;
+        };
         /** Credentials */
         Credentials: {
             /**
@@ -283,6 +305,7 @@ export interface components {
         };
         /** DashboardResponse */
         DashboardResponse: {
+            capabilities: components["schemas"]["AppCapabilitiesResponse"];
             /** Date */
             date: string;
             /** Timezone */
@@ -611,6 +634,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    capabilities_api_v1_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppCapabilitiesResponse"];
+                };
+            };
+        };
+    };
     setup_api_v1_setup_post: {
         parameters: {
             query?: never;

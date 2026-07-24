@@ -125,6 +125,10 @@ class Settings(BaseSettings):
     def secure_cookies(self) -> bool:
         return self.app_env not in {"local", "test"}
 
+    @property
+    def agent_access_enabled(self) -> bool:
+        return self.app_env != "local"
+
 
 @lru_cache
 def get_settings() -> Settings:

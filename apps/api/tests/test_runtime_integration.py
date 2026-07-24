@@ -34,6 +34,7 @@ async def test_setup_session_and_empty_dashboard() -> None:
         dashboard = await client.get("/api/v1/dashboard?date=2026-07-22")
         assert dashboard.status_code == 200, dashboard.text
         payload = dashboard.json()
+        assert payload["capabilities"]["agentAccessEnabled"] is False
         assert payload["timezone"] == "Asia/Phnom_Penh"
         assert "scores" not in payload
 

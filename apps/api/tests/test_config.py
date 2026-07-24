@@ -31,7 +31,13 @@ def test_production_requires_real_secrets_and_https_callback() -> None:
 def test_valid_production_polling_configuration() -> None:
     settings = production_settings()
     assert settings.secure_cookies is True
+    assert settings.agent_access_enabled is True
     assert settings.google_health_webhook_enabled is False
+
+
+def test_local_environment_disables_agent_access() -> None:
+    assert Settings(app_env="local", _env_file=None).agent_access_enabled is False
+    assert Settings(app_env="test", _env_file=None).agent_access_enabled is True
 
 
 def test_mcp_public_url_cannot_contain_a_token_query() -> None:
