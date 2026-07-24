@@ -155,7 +155,14 @@ def _type(
     true_zero: bool = False,
 ) -> DataType:
     poll_interval, overlap, priority = POLLING_DEFAULTS[tier]
-    page_size = 25 if endpoint_id in {"sleep", "exercise"} else 1000
+    if endpoint_id in {"sleep", "exercise"}:
+        page_size = 25
+    elif endpoint_id == "calories-in-heart-rate-zone":
+        # Google caps the daily rollup page window at window_size_days * page_size <= 14
+        # for this data type specifically.
+        page_size = 14
+    else:
+        page_size = 1000
     maximum_range_days = 14 if endpoint_id in CONSTRAINED_RANGE_TYPES else 90
     supported_operations = [fetch_method.value]
     if endpoint_id in AGGREGATE_TYPES:
@@ -297,6 +304,11 @@ DATA_TYPES = (
         ECG_SCOPE,
         fetch_method=FetchMethod.LIST,
         tier=PollingTier.RARE,
+        # Google only supports a start_time >= filter for ECG (no civil_ prefix, no
+        # upper bound), which the generic AND-range filter builder can't produce.
+        # Skip server-side filtering, matching the existing food/food-measurement-unit
+        # pattern; ECG polls infrequently (RARE tier) so an unfiltered fetch is cheap.
+        filter_field=None,
     ),
     _type(
         "exercise",
