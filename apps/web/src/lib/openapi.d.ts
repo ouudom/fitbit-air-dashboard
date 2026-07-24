@@ -72,58 +72,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/oauth/authorize/preview": {
+    "/api/v1/mcp-tokens": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Preview Authorization */
-        get: operations["preview_authorization_api_v1_oauth_authorize_preview_get"];
+        /** List Mcp Tokens */
+        get: operations["list_mcp_tokens_api_v1_mcp_tokens_get"];
         put?: never;
-        post?: never;
+        /** Create Mcp Token */
+        post: operations["create_mcp_token_api_v1_mcp_tokens_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/oauth/authorize/decision": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Decide Authorization */
-        post: operations["decide_authorization_api_v1_oauth_authorize_decision_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/oauth-grants": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Oauth Grants */
-        get: operations["list_oauth_grants_api_v1_oauth_grants_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/oauth-grants/{grant_id}": {
+    "/api/v1/mcp-tokens/{token_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -133,8 +100,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Revoke Oauth Grant */
-        delete: operations["revoke_oauth_grant_api_v1_oauth_grants__grant_id__delete"];
+        /** Revoke Mcp Token */
+        delete: operations["revoke_mcp_token_api_v1_mcp_tokens__token_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -282,31 +249,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** AgentOAuthGrantResponse */
-        AgentOAuthGrantResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Client Id */
-            client_id: string;
-            /** Client Name */
-            client_name: string;
-            /** Scopes */
-            scopes: components["schemas"]["AgentScope"][];
-            /** Resource */
-            resource: string;
-            /** Last Used At */
-            last_used_at: string | null;
-            /** Revoked At */
-            revoked_at: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-        };
         /**
          * AgentScope
          * @enum {string}
@@ -340,6 +282,69 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** IssuedMcpTokenResponse */
+        IssuedMcpTokenResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Token Prefix */
+            token_prefix: string;
+            /** Scopes */
+            scopes: components["schemas"]["AgentScope"][];
+            /** Expires At */
+            expires_at: string | null;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Revoked At */
+            revoked_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Token */
+            token: string;
+            /** Mcp Url */
+            mcp_url: string;
+        };
+        /** McpTokenCreate */
+        McpTokenCreate: {
+            /** Name */
+            name: string;
+            /** Scopes */
+            scopes: components["schemas"]["AgentScope"][];
+            /** Expires At */
+            expires_at?: string | null;
+        };
+        /** McpTokenResponse */
+        McpTokenResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Token Prefix */
+            token_prefix: string;
+            /** Scopes */
+            scopes: components["schemas"]["AgentScope"][];
+            /** Expires At */
+            expires_at: string | null;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Revoked At */
+            revoked_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** MetricResponse */
         MetricResponse: {
             /** Key */
@@ -358,51 +363,6 @@ export interface components {
             freshness: string;
             /** Availability */
             availability: string;
-        };
-        /** OAuthAuthorizationDecisionRequest */
-        OAuthAuthorizationDecisionRequest: {
-            /** Approved */
-            approved: boolean;
-            /** Client Id */
-            client_id: string;
-            /** Redirect Uri */
-            redirect_uri: string;
-            /**
-             * Response Type
-             * @constant
-             */
-            response_type: "code";
-            /** Code Challenge */
-            code_challenge: string;
-            /**
-             * Code Challenge Method
-             * @constant
-             */
-            code_challenge_method: "S256";
-            /** Scope */
-            scope: string;
-            /** Resource */
-            resource: string;
-            /** State */
-            state?: string | null;
-        };
-        /** OAuthAuthorizationDecisionResponse */
-        OAuthAuthorizationDecisionResponse: {
-            /** Redirect To */
-            redirect_to: string;
-        };
-        /** OAuthAuthorizationPreviewResponse */
-        OAuthAuthorizationPreviewResponse: {
-            /** Client Id */
-            client_id: string;
-            /** Client Name */
-            client_name: string;
-            /** Redirect Uri */
-            redirect_uri: string;
-            /** Scopes */
-            scopes: components["schemas"]["AgentScope"][];
-            /** Resource */
-            resource: string;
         };
         /** SessionResponse */
         SessionResponse: {
@@ -625,18 +585,9 @@ export interface operations {
             };
         };
     };
-    preview_authorization_api_v1_oauth_authorize_preview_get: {
+    list_mcp_tokens_api_v1_mcp_tokens_get: {
         parameters: {
-            query: {
-                client_id: string;
-                redirect_uri: string;
-                response_type: string;
-                code_challenge: string;
-                code_challenge_method: string;
-                resource: string;
-                scope?: string;
-                state?: string | null;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: {
@@ -651,7 +602,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OAuthAuthorizationPreviewResponse"];
+                    "application/json": components["schemas"]["McpTokenResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -665,7 +616,7 @@ export interface operations {
             };
         };
     };
-    decide_authorization_api_v1_oauth_authorize_decision_post: {
+    create_mcp_token_api_v1_mcp_tokens_post: {
         parameters: {
             query?: never;
             header?: {
@@ -679,17 +630,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["OAuthAuthorizationDecisionRequest"];
+                "application/json": components["schemas"]["McpTokenCreate"];
             };
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OAuthAuthorizationDecisionResponse"];
+                    "application/json": components["schemas"]["IssuedMcpTokenResponse"];
                 };
             };
             /** @description Validation Error */
@@ -703,45 +654,14 @@ export interface operations {
             };
         };
     };
-    list_oauth_grants_api_v1_oauth_grants_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                lifestats_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentOAuthGrantResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    revoke_oauth_grant_api_v1_oauth_grants__grant_id__delete: {
+    revoke_mcp_token_api_v1_mcp_tokens__token_id__delete: {
         parameters: {
             query?: never;
             header?: {
                 "X-CSRF-Token"?: string | null;
             };
             path: {
-                grant_id: string;
+                token_id: string;
             };
             cookie?: {
                 lifestats_csrf?: string | null;

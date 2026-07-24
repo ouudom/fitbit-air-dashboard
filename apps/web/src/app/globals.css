@@ -22,7 +22,6 @@
   background: var(--canvas);
   color: var(--text);
 }
-
 * {
   box-sizing: border-box;
 }
@@ -914,122 +913,6 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
   gap: 18px;
-}
-
-.agentSetup {
-  display: grid;
-  gap: 18px;
-  margin-top: 18px;
-}
-
-.agentSetup > p,
-.agentSetup div > p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.6;
-}
-
-.agentSetup > div {
-  display: grid;
-  gap: 8px;
-}
-
-.agentSetup pre {
-  overflow-x: auto;
-  margin: 0;
-  padding: 13px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface-inset);
-}
-
-.agentSetup code {
-  font-size: 10px;
-  line-height: 1.6;
-}
-
-.oauthConsentPage {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: var(--canvas);
-}
-
-.oauthConsentPanel {
-  width: min(100%, 560px);
-  display: grid;
-  gap: 18px;
-  padding: 28px;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--surface);
-  box-shadow: 0 24px 70px rgb(0 0 0 / 30%);
-}
-
-.oauthConsentPanel h1,
-.oauthConsentPanel h2,
-.oauthConsentPanel p {
-  margin: 0;
-}
-
-.oauthConsentPanel h1 {
-  font-size: 26px;
-}
-
-.oauthConsentPanel h2 {
-  font-size: 13px;
-}
-
-.oauthConsentPanel > p:not(.eyebrow, .errorBanner) {
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.6;
-}
-
-.consentResource {
-  display: grid;
-  gap: 6px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface-inset);
-}
-
-.consentResource span {
-  color: var(--text-muted);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.consentResource code {
-  overflow-wrap: anywhere;
-  font-size: 10px;
-}
-
-.consentScopes {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.consentScopes li {
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--surface-inset);
-  font-size: 10px;
-}
-
-.consentActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 9px;
 }
 
 .tokenCreatePanel,

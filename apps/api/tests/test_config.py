@@ -14,7 +14,6 @@ def production_settings(**overrides: object) -> Settings:
         "google_client_secret": "client-secret",
         "redirect_uri": "https://health.example/api/v1/oauth/google-health/callback",
         "mcp_public_url": "https://health.example/mcp",
-        "mcp_oauth_issuer_url": "https://health.example",
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)  # type: ignore[arg-type]
@@ -33,6 +32,11 @@ def test_valid_production_polling_configuration() -> None:
     settings = production_settings()
     assert settings.secure_cookies is True
     assert settings.google_health_webhook_enabled is False
+
+
+def test_mcp_public_url_cannot_contain_a_token_query() -> None:
+    with pytest.raises(ValidationError, match="without query or fragment"):
+        production_settings(mcp_public_url="https://health.example/mcp?token=secret")
 
 
 def test_enabled_webhook_requires_complete_https_configuration() -> None:

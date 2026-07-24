@@ -9,13 +9,11 @@ from src.modules.google_health.models import (
 )
 
 
-def test_tables_include_oauth_credentials() -> None:
+def test_tables_include_mcp_tokens() -> None:
     expected = {
         "users",
         "sessions",
-        "oauth_clients",
-        "oauth_grants",
-        "oauth_credentials",
+        "mcp_tokens",
         "gh_connections",
         "gh_sync_job",
         "gh_records",

@@ -60,6 +60,27 @@ Table sessions {
   }
 }
 
+Table mcp_tokens {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id bigint [not null]
+  name varchar(100) [not null]
+  token_prefix varchar(16) [not null, note: "Display-only prefix; never enough to authenticate"]
+  token_hash char(64) [not null, unique, note: "SHA-256 digest of the high-entropy raw token"]
+  scopes text[] [not null]
+  expires_at timestamptz
+  last_used_at timestamptz
+  revoked_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    user_id
+    expires_at
+    revoked_at
+  }
+
+  Note: "Per-user MCP credentials. Raw token is returned once and supplied as the MCP URL token query parameter."
+}
+
 Table gh_connections {
   id uuid [pk, default: `gen_random_uuid()`]
   user_id bigint [not null, unique]
@@ -166,6 +187,7 @@ Table gh_webhook_events {
 }
 
 Ref: sessions.user_id > users.id [delete: cascade]
+Ref: mcp_tokens.user_id > users.id [delete: cascade]
 Ref: gh_connections.user_id > users.id [delete: cascade]
 Ref: gh_sync_job.connection_id > gh_connections.id [delete: cascade]
 Ref: gh_records.connection_id > gh_connections.id [delete: cascade]
