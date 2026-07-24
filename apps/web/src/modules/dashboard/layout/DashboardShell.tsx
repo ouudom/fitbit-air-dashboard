@@ -17,7 +17,7 @@ const navigation: Array<{
   label: string;
   icon: string;
 }> = [
-  { id: "overview", href: "/dashboard", label: "Today", icon: "⌂" },
+  { id: "overview", href: "/dashboard", label: "Dashboard", icon: "⌂" },
   { id: "steps", href: "/steps", label: "Steps", icon: "↗" },
   { id: "sleep", href: "/sleep", label: "Sleep", icon: "☾" },
   { id: "water-intake", href: "/water-intake", label: "Water intake", icon: "◉" },
@@ -48,9 +48,9 @@ export function DashboardShell({
             </Avatar>
             <div className="min-w-0">
               <Typography weight="bold">LifeStats</Typography>
-              <Typography className="block" color="muted" type="body-xs">
+              {/* <Typography className="block" color="muted" type="body-xs">
                 Google Health companion
-              </Typography>
+              </Typography> */}
             </div>
           </div>
 

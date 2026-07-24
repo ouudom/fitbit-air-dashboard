@@ -134,11 +134,6 @@ export function Settings({
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-8">
       <PageHeader
-        description={
-          agentAccessEnabled
-            ? "Manage your account, connected health data, and agent credentials."
-            : "Manage your account and connected health data."
-        }
         eyebrow="LifeStats"
         title="Settings"
       />

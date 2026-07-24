@@ -5,27 +5,22 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { EvilAnimatedBarChart } from "@/components/charts/EvilCharts";
 import { AppAlert } from "@/components/ui/AppAlert";
-import { AppTextField } from "@/components/ui/AppTextField";
 import { EmptyContent } from "@/components/ui/EmptyContent";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { api } from "@/lib/api";
 import type { Insights } from "@/lib/types";
 import {
+  completeDailySeries,
   dateTick,
+  displaysMissingDays,
   insightsPath,
   type RangeKey,
   RangeTabs,
   rangeLabel,
 } from "../insights";
 
-export function StepsOverview({
-  date,
-  onDateChange,
-}: {
-  date: string;
-  onDateChange: (date: string) => void;
-}) {
+export function StepsOverview({ date }: { date: string }) {
   const [range, setRange] = useState<RangeKey>("week");
   const insights = useQuery({
     queryKey: ["insights", range, date],
@@ -36,9 +31,13 @@ export function StepsOverview({
   const values = points.map((point) => point.value);
   const total = values.reduce((sum, value) => sum + value, 0);
   const average = values.length ? Math.round(total / values.length) : null;
-  const chartData =
-    range === "day"
-      ? buckets.map((point) => ({
+  const hasTimeBuckets = range === "day" && buckets.length > 0;
+  const chartPoints =
+    insights.data && displaysMissingDays(range)
+      ? completeDailySeries(points, insights.data.start, insights.data.end)
+      : points;
+  const chartData = hasTimeBuckets
+    ? buckets.map((point) => ({
           label: new Date(point.startedAt).toLocaleTimeString([], {
             hour: "numeric",
             timeZone: insights.data?.timezone,
@@ -50,33 +49,17 @@ export function StepsOverview({
             timeZone: insights.data?.timezone,
           }),
         }))
-      : points.map((point) => ({
-          label: dateTick(point.date, range),
-          value: point.value,
-          detail: new Date(`${point.date}T12:00:00Z`).toLocaleDateString([], {
-            dateStyle: "full",
-          }),
-        }));
+    : chartPoints.map((point) => ({
+        label: dateTick(point.date, range),
+        value: point.value,
+        detail: new Date(`${point.date}T12:00:00Z`).toLocaleDateString([], {
+          dateStyle: "full",
+        }),
+      }));
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-6">
-      <PageHeader
-        actions={
-          <AppTextField
-            className="w-40 max-sm:basis-full"
-            inputProps={{
-              "aria-label": "Steps end date",
-              onChange: (event) => onDateChange(event.target.value),
-              type: "date",
-              value: date,
-            }}
-            label="End date"
-          />
-        }
-        description="Source-backed step totals and activity patterns."
-        eyebrow="Google Health steps"
-        title="Steps"
-      />
+      <PageHeader title="Steps" />
 
       <RangeTabs onChange={setRange} value={range} />
 
@@ -102,7 +85,7 @@ export function StepsOverview({
                 }
                 eyebrow={rangeLabel(insights.data)}
                 id="steps-chart-title"
-                title={range === "day" ? "Steps by time" : "Steps over time"}
+                title={hasTimeBuckets ? "Steps by time" : "Steps over time"}
               />
             </Card.Header>
             <Card.Content className="grid gap-6">
@@ -117,7 +100,7 @@ export function StepsOverview({
                   </div>
                 )}
               </div>
-              {chartData.length ? (
+              {points.length || hasTimeBuckets ? (
                 <EvilAnimatedBarChart
                   data={chartData}
                   formatValue={formatNumber}
@@ -140,7 +123,6 @@ export function StepsOverview({
                     <Chip.Label>{points.length} days</Chip.Label>
                   </Chip>
                 }
-                eyebrow="Recorded totals"
                 id="steps-days-title"
                 title="Daily steps"
               />

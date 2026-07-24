@@ -47,6 +47,29 @@ export function dateTick(value: string, range: RangeKey): string {
   });
 }
 
+export function completeDailySeries(
+  points: Array<{ date: string; value: number }>,
+  start: string,
+  end: string,
+): Array<{ date: string; value: number | null }> {
+  const valuesByDate = new Map(points.map((point) => [point.date, point.value]));
+  const cursor = parseDate(start);
+  const last = parseDate(end);
+  const series: Array<{ date: string; value: number | null }> = [];
+
+  while (cursor <= last) {
+    const date = cursor.toISOString().slice(0, 10);
+    series.push({ date, value: valuesByDate.get(date) ?? null });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return series;
+}
+
+export function displaysMissingDays(range: RangeKey): boolean {
+  return range === "week" || range === "month" || range === "quarter";
+}
+
 export function RangeTabs({
   onChange,
   value,

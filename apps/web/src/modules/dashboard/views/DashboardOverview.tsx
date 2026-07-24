@@ -1,7 +1,6 @@
 import { buttonVariants, Card, Chip, Typography } from "@heroui/react";
 import { AppAlert } from "@/components/ui/AppAlert";
 import { AppButton } from "@/components/ui/AppButton";
-import { AppTextField } from "@/components/ui/AppTextField";
 import { EmptyContent } from "@/components/ui/EmptyContent";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -12,8 +11,6 @@ type DashboardOverviewProps = {
   connected: boolean;
   connectionLoading: boolean;
   data: Dashboard;
-  date: string;
-  onDateChange: (date: string) => void;
   onSync: () => void;
   syncError?: string;
   syncing: boolean;
@@ -23,8 +20,6 @@ export function DashboardOverview({
   connected,
   connectionLoading,
   data,
-  date,
-  onDateChange,
   onSync,
   syncError,
   syncing,
@@ -34,16 +29,6 @@ export function DashboardOverview({
       <PageHeader
         actions={
           <>
-            <AppTextField
-              className="w-40 max-sm:basis-full"
-              inputProps={{
-                "aria-label": "Dashboard date",
-                onChange: (event) => onDateChange(event.target.value),
-                type: "date",
-                value: date,
-              }}
-              label="Date"
-            />
             {!connectionLoading && !connected && (
               <a
                 className={buttonVariants({ variant: "secondary" })}
@@ -64,8 +49,6 @@ export function DashboardOverview({
             </AppButton>
           </>
         }
-        description="Latest source-backed signals and Google Health sync activity."
-        eyebrow="Private health dashboard"
         title="Dashboard"
       />
 
@@ -91,7 +74,6 @@ export function DashboardOverview({
                 <Chip.Label>{data.timeline.length} events</Chip.Label>
               </Chip>
             }
-            eyebrow="Selected day"
             id="timeline-title"
             title="Health timeline"
           />

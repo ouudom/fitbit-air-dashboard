@@ -6,7 +6,6 @@ import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 import { EvilAnimatedLineChart } from "@/components/charts/EvilCharts";
 import { AppAlert } from "@/components/ui/AppAlert";
-import { AppTextField } from "@/components/ui/AppTextField";
 import { EmptyContent } from "@/components/ui/EmptyContent";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -35,11 +34,9 @@ const STAGE_META: Record<string, { label: string; color: string }> = {
 export function SleepOverview({
   data,
   date,
-  onDateChange,
 }: {
   data: Dashboard;
   date: string;
-  onDateChange: (date: string) => void;
 }) {
   const [range, setRange] = useState<RangeKey>("day");
   const insights = useQuery({
@@ -52,23 +49,7 @@ export function SleepOverview({
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-6">
-      <PageHeader
-        actions={
-          <AppTextField
-            className="w-40 max-sm:basis-full"
-            inputProps={{
-              "aria-label": "Sleep date",
-              onChange: (event) => onDateChange(event.target.value),
-              type: "date",
-              value: date,
-            }}
-            label="Date"
-          />
-        }
-        description="Session timing and sleep stages reported by Google Health."
-        eyebrow="Google Health sleep"
-        title="Sleep"
-      />
+      <PageHeader title="Sleep" />
 
       <RangeTabs onChange={setRange} value={range} />
 
@@ -213,7 +194,6 @@ function SleepTrendCard({ insights, range }: { insights: Insights; range: RangeK
                 <Chip.Label>{insights.sleep.length} nights</Chip.Label>
               </Chip>
             }
-            eyebrow="Recorded sessions"
             id="sleep-nights-title"
             title="Nightly sleep"
           />
@@ -272,13 +252,6 @@ function SleepHero({ detail, timezone }: { detail: SleepDetail; timezone: string
       <Card.Content className="grid gap-8 p-7 max-sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <Typography
-              className="mb-2 uppercase tracking-[0.1em] text-accent"
-              type="body-xs"
-              weight="bold"
-            >
-              Selected night
-            </Typography>
             <Typography.Heading id="sleep-duration-title" level={2}>
               Sleep duration
             </Typography.Heading>
@@ -448,7 +421,6 @@ function SleepFacts({ detail }: { detail: SleepDetail }) {
               <Chip.Label>Source-backed</Chip.Label>
             </Chip>
           }
-          eyebrow="Night details"
           id="sleep-details-title"
           title="Sleep timing"
         />
@@ -489,7 +461,6 @@ function SleepSessions({
               <Chip.Label>{sessions.length} sessions</Chip.Label>
             </Chip>
           }
-          eyebrow="Selected day"
           id="sessions-title"
           title="Sleep sessions"
         />

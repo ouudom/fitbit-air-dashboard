@@ -2,7 +2,6 @@
 
 import { Spinner, Typography } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
 import { AppAlert } from "@/components/ui/AppAlert";
 import { AppButton } from "@/components/ui/AppButton";
 import { api } from "@/lib/api";
@@ -26,10 +25,9 @@ type IntegrationStatus = {
 
 export function Dashboard({ email, view }: { email: string; view: DashboardView }) {
   const client = useQueryClient();
-  const [date, setDate] = useState<string>();
   const dashboard = useQuery({
-    queryKey: ["dashboard", date ?? "current"],
-    queryFn: () => api<DashboardData>(date ? `/dashboard?date=${date}` : "/dashboard"),
+    queryKey: ["dashboard", "current"],
+    queryFn: () => api<DashboardData>("/dashboard"),
     refetchInterval: (query) => {
       const data = query.state.data;
       return data?.sync.some((item) => item.status === "queued" || item.status === "running")
@@ -58,7 +56,7 @@ export function Dashboard({ email, view }: { email: string; view: DashboardView 
   });
 
   const data = dashboard.data;
-  const selectedDate = date ?? data?.date ?? "";
+  const selectedDate = data?.date ?? "";
   const syncRunning = data?.sync.some(
     (item) => item.status === "queued" || item.status === "running",
   );
@@ -109,8 +107,6 @@ export function Dashboard({ email, view }: { email: string; view: DashboardView 
           connected={integration.data?.connected ?? false}
           connectionLoading={integration.isPending}
           data={data}
-          date={selectedDate}
-          onDateChange={setDate}
           onSync={() => sync.mutate()}
           syncError={sync.error?.message}
           syncing={sync.isPending || Boolean(syncRunning)}
@@ -118,15 +114,13 @@ export function Dashboard({ email, view }: { email: string; view: DashboardView 
       )}
 
       {data && view === "sleep" && (
-        <SleepOverview data={data} date={selectedDate} onDateChange={setDate} />
+        <SleepOverview data={data} date={selectedDate} />
       )}
 
-      {data && view === "steps" && (
-        <StepsOverview date={selectedDate} onDateChange={setDate} />
-      )}
+      {data && view === "steps" && <StepsOverview date={selectedDate} />}
 
       {data && view === "water-intake" && (
-        <WaterIntakeOverview date={selectedDate} onDateChange={setDate} />
+        <WaterIntakeOverview date={selectedDate} />
       )}
 
       {data && view === "settings" && (
