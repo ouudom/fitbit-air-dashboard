@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime, time, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_, select
@@ -28,6 +29,7 @@ class DashboardService:
             "date": selected_day.isoformat(),
             "timezone": timezone.key,
             "metrics": await self._metrics(user_id, selected_day, timezone),
+            "sleep": await self._sleep_detail(user_id, selected_day, timezone),
             "timeline": [
                 {
                     "id": item.id,
@@ -67,7 +69,10 @@ class DashboardService:
                 record
                 for record in sorted(
                     (item for item in records if item.data_type == "sleep"),
-                    key=lambda item: item.last_synced_at,
+                    key=lambda item: (
+                        item.ended_at or datetime.min.replace(tzinfo=UTC),
+                        item.last_synced_at,
+                    ),
                     reverse=True,
                 )
             ),
@@ -129,10 +134,38 @@ class DashboardService:
                         (GoogleHealthRecord.started_at >= utc_start)
                         & (GoogleHealthRecord.started_at < utc_end)
                     ),
+                    (
+                        (GoogleHealthRecord.data_type == "sleep")
+                        & (GoogleHealthRecord.ended_at >= utc_start)
+                        & (GoogleHealthRecord.ended_at < utc_end)
+                    ),
                 ),
             )
         )
         return list((await self.db.scalars(query)).all())
+
+    async def _sleep_detail(
+        self,
+        user_id: int,
+        day: date,
+        timezone: ZoneInfo,
+    ) -> dict[str, object] | None:
+        records = await self._records_for_day(user_id, day, timezone, ("sleep",))
+        row = next(
+            (
+                record
+                for record in sorted(
+                    records,
+                    key=lambda item: (
+                        item.ended_at or datetime.min.replace(tzinfo=UTC),
+                        item.last_synced_at,
+                    ),
+                    reverse=True,
+                )
+            ),
+            None,
+        )
+        return _sleep_detail_from_record(row) if row else None
 
     async def _sync(self, user_id: int) -> list[dict[str, object]]:
         query = (
@@ -166,10 +199,6 @@ def _metric(
     day: date,
     updated_at: datetime | None,
 ) -> dict[str, object]:
-    freshness = "unknown"
-    if updated_at:
-        age = datetime.now(UTC) - updated_at.astimezone(UTC)
-        freshness = "stale" if age > timedelta(days=1) else "fresh"
     return {
         "key": label.lower(),
         "label": label,
@@ -177,6 +206,123 @@ def _metric(
         "unit": unit,
         "source": "Google Health",
         "observedAt": day.isoformat(),
-        "freshness": freshness,
+        "freshness": _record_freshness(updated_at),
         "availability": "available" if value is not None else "not-synced",
     }
+
+
+def _sleep_detail_from_record(record: GoogleHealthRecord) -> dict[str, object] | None:
+    payload = record.raw_payload
+    sleep = payload.get("sleep", payload)
+    if not isinstance(sleep, dict):
+        return None
+
+    interval = sleep.get("interval", {})
+    if not isinstance(interval, dict):
+        interval = {}
+    start_at = _payload_datetime(interval.get("startTime")) or record.started_at
+    end_at = _payload_datetime(interval.get("endTime")) or record.ended_at
+    if start_at is None or end_at is None:
+        return None
+
+    summary = sleep.get("summary", {})
+    if not isinstance(summary, dict):
+        summary = {}
+    minutes_in_period = _payload_int(summary.get("minutesInSleepPeriod"))
+    minutes_asleep = _payload_int(summary.get("minutesAsleep"))
+
+    stage_summaries: dict[str, dict[str, object]] = {}
+    raw_stage_summaries = summary.get("stagesSummary", [])
+    if isinstance(raw_stage_summaries, list):
+        for item in raw_stage_summaries:
+            if not isinstance(item, dict) or not isinstance(item.get("type"), str):
+                continue
+            stage_type = item["type"].upper()
+            minutes = _payload_int(item.get("minutes"))
+            count = _payload_int(item.get("count"))
+            if stage_type not in stage_summaries and minutes is not None and count is not None:
+                stage_summaries[stage_type] = {
+                    "type": stage_type,
+                    "minutes": minutes,
+                    "count": count,
+                }
+
+    stage_order = ("AWAKE", "RESTLESS", "ASLEEP", "REM", "LIGHT", "DEEP")
+    ordered_summaries = [
+        stage_summaries[stage_type] for stage_type in stage_order if stage_type in stage_summaries
+    ]
+    ordered_summaries.extend(
+        stage_summary
+        for stage_type, stage_summary in stage_summaries.items()
+        if stage_type not in stage_order
+    )
+
+    stages: list[dict[str, object]] = []
+    raw_stages = sleep.get("stages", [])
+    if isinstance(raw_stages, list):
+        for item in raw_stages:
+            if not isinstance(item, dict) or not isinstance(item.get("type"), str):
+                continue
+            stage_start = _payload_datetime(item.get("startTime"))
+            stage_end = _payload_datetime(item.get("endTime"))
+            if stage_start is None or stage_end is None or stage_end <= stage_start:
+                continue
+            stages.append(
+                {
+                    "type": item["type"].upper(),
+                    "startAt": stage_start,
+                    "endAt": stage_end,
+                }
+            )
+
+    efficiency = None
+    if minutes_asleep is not None and minutes_in_period:
+        efficiency = round(minutes_asleep / minutes_in_period * 100, 1)
+
+    return {
+        "sessionId": str(record.id),
+        "startAt": start_at,
+        "endAt": end_at,
+        "minutesInSleepPeriod": minutes_in_period,
+        "minutesAsleep": minutes_asleep,
+        "minutesAwake": _payload_int(summary.get("minutesAwake")),
+        "minutesToFallAsleep": _payload_int(summary.get("minutesToFallAsleep")),
+        "minutesAfterWakeUp": _payload_int(summary.get("minutesAfterWakeUp")),
+        "sleepEfficiency": efficiency,
+        "stages": stages,
+        "stageSummary": ordered_summaries,
+        "source": "Google Health",
+        "freshness": _record_freshness(record.last_synced_at),
+        "availability": "available",
+        "derivation": (
+            "Sleep efficiency is calculated by LifeStats from Google Health minutes asleep "
+            "and minutes in the sleep period."
+        ),
+        "lastSyncedAt": record.last_synced_at,
+    }
+
+
+def _payload_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed.astimezone(UTC) if parsed.tzinfo else None
+
+
+def _payload_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _record_freshness(updated_at: datetime | None) -> str:
+    if updated_at is None:
+        return "unknown"
+    age = datetime.now(UTC) - updated_at.astimezone(UTC)
+    return "stale" if age > timedelta(days=1) else "fresh"

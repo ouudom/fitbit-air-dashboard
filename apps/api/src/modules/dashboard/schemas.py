@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -30,9 +32,41 @@ class SyncStateResponse(BaseModel):
     error: str | None
 
 
+class SleepStageSegmentResponse(BaseModel):
+    type: str
+    startAt: datetime
+    endAt: datetime
+
+
+class SleepStageSummaryResponse(BaseModel):
+    type: str
+    minutes: int
+    count: int
+
+
+class SleepDetailResponse(BaseModel):
+    sessionId: str
+    startAt: datetime
+    endAt: datetime
+    minutesInSleepPeriod: int | None
+    minutesAsleep: int | None
+    minutesAwake: int | None
+    minutesToFallAsleep: int | None
+    minutesAfterWakeUp: int | None
+    sleepEfficiency: float | None
+    stages: list[SleepStageSegmentResponse]
+    stageSummary: list[SleepStageSummaryResponse]
+    source: str
+    freshness: str
+    availability: str
+    derivation: str
+    lastSyncedAt: datetime
+
+
 class DashboardResponse(BaseModel):
     date: str
     timezone: str
     metrics: list[MetricResponse]
     timeline: list[TimelineItemResponse]
     sync: list[SyncStateResponse]
+    sleep: SleepDetailResponse | None

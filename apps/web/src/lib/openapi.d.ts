@@ -276,6 +276,7 @@ export interface components {
             timeline: components["schemas"]["TimelineItemResponse"][];
             /** Sync */
             sync: components["schemas"]["SyncStateResponse"][];
+            sleep: components["schemas"]["SleepDetailResponse"] | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -389,6 +390,74 @@ export interface components {
             password: string;
             /** Setup Token */
             setup_token: string;
+        };
+        /** SleepDetailResponse */
+        SleepDetailResponse: {
+            /** Sessionid */
+            sessionId: string;
+            /**
+             * Startat
+             * Format: date-time
+             */
+            startAt: string;
+            /**
+             * Endat
+             * Format: date-time
+             */
+            endAt: string;
+            /** Minutesinsleepperiod */
+            minutesInSleepPeriod: number | null;
+            /** Minutesasleep */
+            minutesAsleep: number | null;
+            /** Minutesawake */
+            minutesAwake: number | null;
+            /** Minutestofallasleep */
+            minutesToFallAsleep: number | null;
+            /** Minutesafterwakeup */
+            minutesAfterWakeUp: number | null;
+            /** Sleepefficiency */
+            sleepEfficiency: number | null;
+            /** Stages */
+            stages: components["schemas"]["SleepStageSegmentResponse"][];
+            /** Stagesummary */
+            stageSummary: components["schemas"]["SleepStageSummaryResponse"][];
+            /** Source */
+            source: string;
+            /** Freshness */
+            freshness: string;
+            /** Availability */
+            availability: string;
+            /** Derivation */
+            derivation: string;
+            /**
+             * Lastsyncedat
+             * Format: date-time
+             */
+            lastSyncedAt: string;
+        };
+        /** SleepStageSegmentResponse */
+        SleepStageSegmentResponse: {
+            /** Type */
+            type: string;
+            /**
+             * Startat
+             * Format: date-time
+             */
+            startAt: string;
+            /**
+             * Endat
+             * Format: date-time
+             */
+            endAt: string;
+        };
+        /** SleepStageSummaryResponse */
+        SleepStageSummaryResponse: {
+            /** Type */
+            type: string;
+            /** Minutes */
+            minutes: number;
+            /** Count */
+            count: number;
         };
         /** SyncRequest */
         SyncRequest: {

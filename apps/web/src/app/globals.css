@@ -21,6 +21,7 @@
   --sleep-deep: #566d9f;
   --sleep-rem: #9a7fbb;
   --sleep-awake: #c98a68;
+  --sleep-restless: #d6a53a;
   font-family: Instrument Sans, ui-sans-serif, system-ui, sans-serif;
   background: var(--canvas);
   color: var(--text);
