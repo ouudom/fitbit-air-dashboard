@@ -96,7 +96,7 @@ class DashboardService:
             ),
             _metric(
                 "Sleep",
-                round(float(sleep_minutes) / 60, 1) if sleep_minutes is not None else None,
+                float(sleep_minutes) / 60 if sleep_minutes is not None else None,
                 "h",
                 day,
                 sleep_updated,

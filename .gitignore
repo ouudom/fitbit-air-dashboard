@@ -11,6 +11,7 @@
 /.vscode
 /.zed
 /node_modules
+/apps/web/node_modules
 /vendor
 /.venv
 /.mypy_cache

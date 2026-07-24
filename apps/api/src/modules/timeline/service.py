@@ -108,7 +108,10 @@ def _health_label(data_type: str, payload: dict[str, Any]) -> tuple[str, str | N
     inner = payload.get(data_type.replace("-", ""), payload.get(_camel(data_type), payload))
     if data_type == "sleep":
         minutes = inner.get("summary", {}).get("minutesAsleep") if isinstance(inner, dict) else None
-        return "Sleep", f"{round(minutes / 60, 1)} h" if isinstance(minutes, (int, float)) else None
+        return (
+            "Sleep",
+            _format_duration_minutes(minutes) if isinstance(minutes, (int, float)) else None,
+        )
     if data_type == "nutrition-log":
         return "Nutrition logged", None
     if data_type == "hydration-log":
@@ -142,3 +145,13 @@ def _duration_seconds(value: Any) -> float | None:
         except ValueError:
             return None
     return None
+
+
+def _format_duration_minutes(value: int | float) -> str:
+    total_minutes = max(0, round(value))
+    hours, minutes = divmod(total_minutes, 60)
+    if hours == 0:
+        return f"{minutes}mn"
+    if minutes == 0:
+        return f"{hours}h"
+    return f"{hours}h {minutes}mn"

@@ -1,7 +1,14 @@
 "use client";
 
+import { Card, Checkbox, Chip, Spinner, Surface, Typography } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
+import { AppAlert } from "@/components/ui/AppAlert";
+import { AppButton } from "@/components/ui/AppButton";
+import { AppTextField } from "@/components/ui/AppTextField";
+import { EmptyContent } from "@/components/ui/EmptyContent";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { api } from "@/lib/api";
 import type { AgentScope, McpToken, IssuedMcpToken } from "@/lib/types";
 
@@ -21,7 +28,7 @@ const scopeOptions: ScopeOption[] = [
   },
   {
     scope: "today:read",
-    label: "Today",
+    label: "Dashboard",
     detail: "Daily metrics and timeline",
     group: "Read access",
   },
@@ -186,188 +193,240 @@ export function AgentAccess() {
   }
 
   return (
-    <div className="viewStack agentAccessView">
-      <header className="pageHeader">
-        <div>
-          <p className="eyebrow">Account utility</p>
-          <h1>Agent access</h1>
-          <p>Create scoped credentials for any Streamable HTTP MCP client.</p>
-        </div>
-      </header>
+    <div className="mx-auto grid w-full max-w-6xl gap-6">
+      <PageHeader
+        description="Create scoped credentials for any Streamable HTTP MCP client."
+        eyebrow="Account utility"
+        title="Agent access"
+      />
 
       {issued && (
-        <section className="secretPanel" aria-labelledby="new-token-title">
-          <div>
-            <p className="sectionKicker">Created successfully</p>
-            <h2 id="new-token-title">Copy this token now</h2>
-            <p>LifeStats stores only its hash. This value cannot be shown again.</p>
-          </div>
-          <code>{issued.token}</code>
-          <code>{issued.mcp_url}</code>
-          {copyError && (
-            <p className="errorBanner" role="alert">
-              {copyError}
-            </p>
-          )}
-          <div className="tokenActions">
-            <button className="primaryButton" onClick={copyMcpUrl} type="button">
+        <Card variant="default" aria-labelledby="new-token-title">
+          <Card.Header>
+            <SectionHeader
+              action={
+                <Chip color="success" size="sm" variant="soft">
+                  <Chip.Label>Created successfully</Chip.Label>
+                </Chip>
+              }
+              eyebrow="New credential"
+              id="new-token-title"
+              title="Copy this token now"
+            />
+          </Card.Header>
+          <Card.Content className="grid gap-3">
+            <Typography.Paragraph color="muted" size="sm">
+              LifeStats stores only its hash. This value cannot be shown again.
+            </Typography.Paragraph>
+            <Typography.Code className="block overflow-x-auto rounded-lg bg-surface-tertiary p-3">
+              {issued.token}
+            </Typography.Code>
+            <Typography.Code className="block overflow-x-auto rounded-lg bg-surface-tertiary p-3">
+              {issued.mcp_url}
+            </Typography.Code>
+            {copyError && <AppAlert message={copyError} title="Clipboard unavailable" />}
+          </Card.Content>
+          <Card.Footer className="flex flex-wrap gap-2">
+            <AppButton onPress={copyMcpUrl} type="button">
               {copiedUrl ? "URL copied" : "Copy MCP URL"}
-            </button>
-            <button className="secondaryButton" onClick={copyToken} type="button">
+            </AppButton>
+            <AppButton onPress={copyToken} tone="secondary" type="button">
               {copiedToken ? "Token copied" : "Copy token"}
-            </button>
-            <button className="secondaryButton" onClick={() => setIssued(undefined)} type="button">
+            </AppButton>
+            <AppButton onPress={() => setIssued(undefined)} tone="secondary" type="button">
               I saved it
-            </button>
-          </div>
-        </section>
+            </AppButton>
+          </Card.Footer>
+        </Card>
       )}
 
-      <div className="agentAccessGrid">
-        <section className="panel tokenCreatePanel" aria-labelledby="create-token-title">
-          <div className="panelHeading">
-            <div>
-              <p className="sectionKicker">New credential</p>
-              <h2 id="create-token-title">Create MCP token</h2>
-            </div>
-          </div>
-
-          <form className="tokenForm" onSubmit={submit}>
-            <div className="tokenFormFields">
-              <label>
-                <span>Name</span>
-                <input
-                  autoComplete="off"
-                  defaultValue="Codex"
-                  maxLength={100}
+      <div className="grid grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] items-start gap-4 max-xl:grid-cols-1">
+        <Card variant="secondary" aria-labelledby="create-token-title">
+          <Card.Header>
+            <SectionHeader
+              eyebrow="New credential"
+              id="create-token-title"
+              title="Create MCP token"
+            />
+          </Card.Header>
+          <Card.Content>
+            <form className="grid gap-5" onSubmit={submit}>
+              <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+                <AppTextField
+                  inputProps={{
+                    autoComplete: "off",
+                    defaultValue: "Codex",
+                    maxLength: 100,
+                  }}
+                  isRequired
+                  label="Name"
                   name="name"
-                  required
                 />
-              </label>
-              <label>
-                <span>Expires</span>
-                <input min={new Date().toISOString().slice(0, 10)} name="expires" type="date" />
-                <small>Optional</small>
-              </label>
-            </div>
+                <AppTextField
+                  description="Optional"
+                  inputProps={{
+                    min: new Date().toISOString().slice(0, 10),
+                    type: "date",
+                  }}
+                  label="Expires"
+                  name="expires"
+                />
+              </div>
 
-            <div className="scopeGroups">
-              {scopeGroups.map((group) => (
-                <fieldset key={group}>
-                  <legend>{group}</legend>
-                  {scopeOptions
-                    .filter((option) => option.group === group)
-                    .map((option) => (
-                      <label className="scopeOption" key={option.scope}>
-                        <input
-                          checked={selectedScopes.has(option.scope)}
+              <div className="grid gap-5">
+                {scopeGroups.map((group) => (
+                  <fieldset
+                    className="grid grid-cols-2 gap-x-4 border-t border-separator pt-3 max-sm:grid-cols-1"
+                    key={group}
+                  >
+                    <legend className="pr-2 text-xs font-semibold text-muted">{group}</legend>
+                    {scopeOptions
+                      .filter((option) => option.group === group)
+                      .map((option) => (
+                        <Checkbox
+                          isSelected={selectedScopes.has(option.scope)}
+                          key={option.scope}
+                          name="scopes"
                           onChange={() => toggleScope(option.scope)}
-                          type="checkbox"
-                        />
-                        <span>
-                          <strong>{option.label}</strong>
-                          <small>{option.detail}</small>
-                        </span>
-                      </label>
-                    ))}
-                </fieldset>
-              ))}
-            </div>
+                          value={option.scope}
+                          variant="secondary"
+                        >
+                          <Checkbox.Content className="items-start py-2.5">
+                            <Checkbox.Control>
+                              <Checkbox.Indicator />
+                            </Checkbox.Control>
+                            <span className="min-w-0">
+                              <Typography className="block" type="body-sm" weight="semibold">
+                                {option.label}
+                              </Typography>
+                              <Typography className="block" color="muted" type="body-xs">
+                                {option.detail}
+                              </Typography>
+                            </span>
+                          </Checkbox.Content>
+                        </Checkbox>
+                      ))}
+                  </fieldset>
+                ))}
+              </div>
 
-            {createToken.error && (
-              <p className="errorBanner" role="alert">
-                {createToken.error.message}
-              </p>
+              {createToken.error && (
+                <AppAlert message={createToken.error.message} title="Token creation failed" />
+              )}
+              <AppButton
+                className="justify-self-start"
+                isDisabled={createToken.isPending || selectedScopes.size === 0}
+                isPending={createToken.isPending}
+                type="submit"
+              >
+                {createToken.isPending ? "Creating…" : "Create token"}
+              </AppButton>
+            </form>
+          </Card.Content>
+        </Card>
+
+        <Card variant="secondary" aria-labelledby="tokens-title">
+          <Card.Header>
+            <SectionHeader
+              action={
+                tokens.data ? (
+                  <Chip size="sm" variant="soft">
+                    <Chip.Label>{tokens.data.length}</Chip.Label>
+                  </Chip>
+                ) : undefined
+              }
+              eyebrow="Credentials"
+              id="tokens-title"
+              title="MCP tokens"
+            />
+          </Card.Header>
+          <Card.Content className="grid gap-3">
+            {tokens.isPending && (
+              <div className="grid justify-items-center gap-2 py-10" role="status">
+                <Spinner color="accent" />
+                <Typography color="muted" type="body-sm">
+                  Loading tokens…
+                </Typography>
+              </div>
             )}
-            <button
-              className="primaryButton"
-              disabled={createToken.isPending || selectedScopes.size === 0}
-              type="submit"
-            >
-              {createToken.isPending ? "Creating…" : "Create token"}
-            </button>
-          </form>
-        </section>
-
-        <section className="panel tokenListPanel" aria-labelledby="tokens-title">
-          <div className="panelHeading">
-            <div>
-              <p className="sectionKicker">Credentials</p>
-              <h2 id="tokens-title">MCP tokens</h2>
-            </div>
-            {tokens.data && <span className="countPill">{tokens.data.length}</span>}
-          </div>
-
-          {tokens.isPending && <p className="tokenListState">Loading tokens…</p>}
-          {tokens.isError && (
-            <p className="errorBanner" role="alert">
-              {tokens.error.message}
-            </p>
-          )}
-          {tokens.data?.length === 0 && (
-            <div className="emptyState compactEmpty">
-              <span aria-hidden="true">⌘</span>
-              <strong>No MCP tokens</strong>
-              <p>Create one when connecting an MCP client.</p>
-            </div>
-          )}
-          {tokens.data && tokens.data.length > 0 && (
-            <ul className="tokenList">
-              {tokens.data.map((token) => {
-                const tokenStatus = status(token);
-                return (
-                  <li key={token.id}>
-                    <div className="tokenIdentity">
-                      <strong>{token.name}</strong>
-                      <code>{token.token_prefix}…</code>
-                    </div>
-                    <span className={`tokenStatus ${tokenStatus.toLowerCase()}`}>
-                      {tokenStatus}
-                    </span>
-                    <dl>
-                      <div>
-                        <dt>Created</dt>
-                        <dd>{dateTime(token.created_at)}</dd>
+            {tokens.isError && (
+              <AppAlert message={tokens.error.message} title="Tokens unavailable" />
+            )}
+            {tokens.data?.length === 0 && (
+              <EmptyContent
+                description="Create one when connecting an MCP client."
+                icon="⌘"
+                title="No MCP tokens"
+              />
+            )}
+            {tokens.data && tokens.data.length > 0 && (
+              <ul className="grid gap-3">
+                {tokens.data.map((token) => {
+                  const tokenStatus = status(token);
+                  return (
+                    <Surface className="grid gap-3 p-4" key={token.id} variant="tertiary">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <Typography className="block" truncate weight="semibold">
+                            {token.name}
+                          </Typography>
+                          <Typography.Code>{token.token_prefix}…</Typography.Code>
+                        </div>
+                        <Chip
+                          color={tokenStatus === "Active" ? "success" : "danger"}
+                          size="sm"
+                          variant="soft"
+                        >
+                          <Chip.Label>{tokenStatus}</Chip.Label>
+                        </Chip>
                       </div>
-                      <div>
-                        <dt>Last used</dt>
-                        <dd>{dateTime(token.last_used_at)}</dd>
-                      </div>
-                      <div>
-                        <dt>Expires</dt>
-                        <dd>{token.expires_at ? dateTime(token.expires_at) : "No expiry"}</dd>
-                      </div>
-                    </dl>
-                    <p className="tokenScopes">{token.scopes.join(" · ")}</p>
-                    {!token.revoked_at && (
-                      <button
-                        className="dangerButton"
-                        disabled={revokeToken.isPending}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Revoke “${token.name}”? The MCP client will lose access.`,
-                            )
-                          ) {
-                            revokeToken.mutate(token.id);
-                          }
-                        }}
-                        type="button"
-                      >
-                        Revoke
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {revokeToken.error && (
-            <p className="errorBanner" role="alert">
-              {revokeToken.error.message}
-            </p>
-          )}
-        </section>
+                      <dl className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
+                        {[
+                          ["Created", dateTime(token.created_at)],
+                          ["Last used", dateTime(token.last_used_at)],
+                          [
+                            "Expires",
+                            token.expires_at ? dateTime(token.expires_at) : "No expiry",
+                          ],
+                        ].map(([label, value]) => (
+                          <div key={label}>
+                            <dt className="text-xs text-muted">{label}</dt>
+                            <dd className="mt-1 text-xs tabular-nums">{value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                      <Typography.Code className="break-words text-xs text-muted">
+                        {token.scopes.join(" · ")}
+                      </Typography.Code>
+                      {!token.revoked_at && (
+                        <AppButton
+                          className="justify-self-start"
+                          isDisabled={revokeToken.isPending}
+                          onPress={() => {
+                            if (
+                              window.confirm(
+                                `Revoke “${token.name}”? The MCP client will lose access.`,
+                              )
+                            ) {
+                              revokeToken.mutate(token.id);
+                            }
+                          }}
+                          tone="danger"
+                          type="button"
+                        >
+                          Revoke
+                        </AppButton>
+                      )}
+                    </Surface>
+                  );
+                })}
+              </ul>
+            )}
+            {revokeToken.error && (
+              <AppAlert message={revokeToken.error.message} title="Token revocation failed" />
+            )}
+          </Card.Content>
+        </Card>
       </div>
     </div>
   );

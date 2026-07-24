@@ -1,3 +1,10 @@
+import { buttonVariants, Card, Chip, Typography } from "@heroui/react";
+import { AppAlert } from "@/components/ui/AppAlert";
+import { AppButton } from "@/components/ui/AppButton";
+import { AppTextField } from "@/components/ui/AppTextField";
+import { EmptyContent } from "@/components/ui/EmptyContent";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { Dashboard } from "@/lib/types";
 import { MetricCard } from "../components/MetricCard";
 
@@ -22,52 +29,60 @@ export function TodayOverview({
   syncError,
   syncing,
 }: TodayOverviewProps) {
-  const errors = data.sync.filter((item) => item.status === "failed");
-  const syncedRecords = data.sync.reduce((total, item) => total + item.recordCount, 0);
-
   return (
-    <div className="viewStack">
-      <header className="pageHeader">
-        <div>
-          <p className="eyebrow">Private health dashboard</p>
-          <h1>Today</h1>
-          <p>Latest source-backed signals and Google Health sync activity.</p>
-        </div>
-        <div className="headerActions">
-          <label className="dateControl">
-            <span>Date</span>
-            <input
-              aria-label="Dashboard date"
-              onChange={(event) => onDateChange(event.target.value)}
-              type="date"
-              value={date}
+    <div className="mx-auto grid w-full max-w-6xl gap-6">
+      <PageHeader
+        actions={
+          <>
+            <AppTextField
+              className="w-40 max-sm:basis-full"
+              inputProps={{
+                "aria-label": "Dashboard date",
+                onChange: (event) => onDateChange(event.target.value),
+                type: "date",
+                value: date,
+              }}
+              label="Date"
             />
-          </label>
-          {!connectionLoading && !connected && (
-            <a className="secondaryButton" href="/api/v1/integrations/google-health/connect">
-              Connect Google Health
-            </a>
-          )}
-          <button className="primaryButton" disabled={syncing || !connected} onClick={onSync}>
-            <span className={syncing ? "syncGlyph spinning" : "syncGlyph"} aria-hidden="true">
-              ↻
-            </span>
-            {syncing ? "Syncing…" : connected ? "Sync data" : "Connect to sync"}
-          </button>
-        </div>
-      </header>
+            {!connectionLoading && !connected && (
+              <a
+                className={buttonVariants({ variant: "secondary" })}
+                href="/api/v1/integrations/google-health/connect"
+              >
+                Connect Google Health
+              </a>
+            )}
+            <AppButton
+              isDisabled={syncing || !connected}
+              isPending={syncing}
+              onPress={onSync}
+            >
+              <span className={`text-lg leading-none ${syncing ? "animate-spin" : ""}`} aria-hidden="true">
+                ↻
+              </span>
+              {syncing ? "Syncing…" : connected ? "Sync data" : "Connect to sync"}
+            </AppButton>
+          </>
+        }
+        description="Latest source-backed signals and Google Health sync activity."
+        eyebrow="Private health dashboard"
+        title="Dashboard"
+      />
 
-      {syncError && <p className="errorBanner" role="alert">{syncError}</p>}
+      {syncError && <AppAlert message={syncError} title="Sync failed" />}
 
       <section aria-labelledby="signals-title">
-        <div className="sectionHeading">
-          <div>
-            <p className="sectionKicker">Daily data</p>
-            <h2 id="signals-title">Primary signals</h2>
-          </div>
-          <span>{data.timezone}</span>
-        </div>
-        <div className="metricGrid">
+        <SectionHeader
+          action={
+            <Chip size="sm" variant="soft">
+              <Chip.Label>{data.timezone}</Chip.Label>
+            </Chip>
+          }
+          eyebrow="Daily data"
+          id="signals-title"
+          title="Primary signals"
+        />
+        <div className="grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-sm:grid-cols-1">
           {data.metrics.map((metric) => (
             <MetricCard
               href={metric.key === "sleep" ? "/sleep" : undefined}
@@ -78,70 +93,55 @@ export function TodayOverview({
         </div>
       </section>
 
-      <div className="overviewGrid">
-        <section className="panel timelinePanel" aria-labelledby="timeline-title">
-          <div className="panelHeading">
-            <div>
-              <p className="sectionKicker">Selected day</p>
-              <h2 id="timeline-title">Health timeline</h2>
-            </div>
-            <span className="countPill">{data.timeline.length} events</span>
-          </div>
+      <Card variant="secondary" aria-labelledby="timeline-title">
+        <Card.Header>
+          <SectionHeader
+            action={
+              <Chip size="sm" variant="soft">
+                <Chip.Label>{data.timeline.length} events</Chip.Label>
+              </Chip>
+            }
+            eyebrow="Selected day"
+            id="timeline-title"
+            title="Health timeline"
+          />
+        </Card.Header>
+        <Card.Content>
           {data.timeline.length ? (
-            <ol className="timeline">
+            <ol className="grid">
               {data.timeline.map((item) => (
-                <li key={item.id}>
-                  <span className="timelineDot" aria-hidden="true" />
-                  <time dateTime={item.occurredAt}>
+                <li
+                  className="grid grid-cols-[12px_64px_minmax(0,1fr)_auto] items-start gap-3 border-b border-separator py-3 last:border-0 max-sm:grid-cols-[12px_minmax(0,1fr)]"
+                  key={item.id}
+                >
+                  <span className="mt-1.5 size-2 rounded-full bg-accent" aria-hidden="true" />
+                  <time className="text-xs tabular-nums text-muted" dateTime={item.occurredAt}>
                     {new Date(item.occurredAt).toLocaleTimeString([], {
                       hour: "2-digit",
                       minute: "2-digit",
                       timeZone: data.timezone,
                     })}
                   </time>
-                  <div>
-                    <strong>{item.title}</strong>
-                    <p>{item.detail ?? item.kind}</p>
+                  <div className="min-w-0">
+                    <Typography weight="semibold">{item.title}</Typography>
+                    <Typography.Paragraph color="muted" size="xs">
+                      {item.detail ?? item.kind}
+                    </Typography.Paragraph>
                   </div>
-                  <span className="sourceLabel">{item.source}</span>
+                  <Chip className="max-sm:col-start-2" size="sm" variant="tertiary">
+                    <Chip.Label>{item.source}</Chip.Label>
+                  </Chip>
                 </li>
               ))}
             </ol>
           ) : (
-            <div className="emptyState">
-              <span aria-hidden="true">○</span>
-              <strong>No events for this day</strong>
-              <p>Sync Google Health or select another date.</p>
-            </div>
+            <EmptyContent
+              description="Sync Google Health or select another date."
+              title="No events for this day"
+            />
           )}
-        </section>
-
-        <aside className="panel sourcePanel" aria-labelledby="source-title">
-          <div className="panelHeading">
-            <div>
-              <p className="sectionKicker">Data provenance</p>
-              <h2 id="source-title">Source status</h2>
-            </div>
-          </div>
-          <dl className="statusList">
-            <div>
-              <dt>Configured data types</dt>
-              <dd>{data.sync.length}</dd>
-            </div>
-            <div>
-              <dt>Projected records</dt>
-              <dd>{syncedRecords.toLocaleString()}</dd>
-            </div>
-            <div>
-              <dt>Streams needing attention</dt>
-              <dd>{errors.length}</dd>
-            </div>
-          </dl>
-          <p className="sourceNote">
-            Google Health remains source of truth. Local rows are rebuildable projections.
-          </p>
-        </aside>
-      </div>
+        </Card.Content>
+      </Card>
     </div>
   );
 }

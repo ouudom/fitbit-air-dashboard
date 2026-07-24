@@ -1,7 +1,10 @@
 "use client";
 
+import { Spinner, Typography } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { AppAlert } from "@/components/ui/AppAlert";
+import { AppButton } from "@/components/ui/AppButton";
 import { api } from "@/lib/api";
 import type { Dashboard } from "@/lib/types";
 import { AgentAccess } from "@/modules/agent-access/AgentAccess";
@@ -76,20 +79,23 @@ export function TodayDashboard({ email, view }: { email: string; view: Dashboard
       syncLabel={syncLabel}
     >
       {view !== "agents" && dashboard.isPending && (
-        <section className="contentState" aria-live="polite">
-          <span className="spinner" aria-hidden="true" />
-          <p>Loading Google Health data…</p>
+        <section
+          className="grid min-h-[calc(100vh-8rem)] place-content-center justify-items-center gap-3"
+          aria-live="polite"
+        >
+          <Spinner color="accent" size="lg" />
+          <Typography.Paragraph color="muted" size="sm">
+            Loading Google Health data…
+          </Typography.Paragraph>
         </section>
       )}
 
       {view !== "agents" && dashboard.isError && (
-        <section className="contentState" role="alert">
-          <span className="stateIcon">!</span>
-          <h1>Dashboard unavailable</h1>
-          <p>{dashboard.error.message}</p>
-          <button className="secondaryButton" onClick={() => dashboard.refetch()}>
+        <section className="mx-auto grid min-h-[calc(100vh-8rem)] max-w-lg place-content-center gap-4">
+          <AppAlert message={dashboard.error.message} title="Dashboard unavailable" />
+          <AppButton onPress={() => dashboard.refetch()} tone="secondary">
             Try again
-          </button>
+          </AppButton>
         </section>
       )}
 

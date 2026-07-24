@@ -1,6 +1,8 @@
 "use client";
 
+import { Spinner } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
+import { AppAlert } from "@/components/ui/AppAlert";
 import { ApiError, api } from "@/lib/api";
 import type { Session } from "@/lib/types";
 import { AuthScreen } from "@/modules/auth/AuthScreen";
@@ -15,9 +17,10 @@ export function DashboardRoute({ view }: { view: DashboardView }) {
 
   if (session.isPending) {
     return (
-      <main className="center">
-        <div className="loader" role="status">
-          Loading LifeStats…
+      <main className="grid min-h-screen place-items-center">
+        <div className="grid justify-items-center gap-3" role="status">
+          <Spinner color="accent" size="lg" />
+          <p className="text-sm text-muted">Loading LifeStats…</p>
         </div>
       </main>
     );
@@ -25,8 +28,10 @@ export function DashboardRoute({ view }: { view: DashboardView }) {
   if (session.error instanceof ApiError && session.error.status === 401) return <AuthScreen />;
   if (session.isError) {
     return (
-      <main className="center">
-        <p role="alert">{session.error.message}</p>
+      <main className="grid min-h-screen place-items-center p-6">
+        <div className="w-full max-w-lg">
+          <AppAlert message={session.error.message} title="LifeStats unavailable" />
+        </div>
       </main>
     );
   }

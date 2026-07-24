@@ -1,5 +1,7 @@
+import { Avatar, Chip, Separator, Surface, Typography } from "@heroui/react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { AppButton } from "@/components/ui/AppButton";
 
 export type DashboardView = "overview" | "sleep" | "agents";
 
@@ -16,12 +18,20 @@ const navigation: Array<{
   id: DashboardView;
   href: string;
   label: string;
-  shortLabel: string;
   icon: string;
 }> = [
-  { id: "overview", href: "/dashboard", label: "Today", shortLabel: "Today", icon: "⌂" },
-  { id: "sleep", href: "/sleep", label: "Sleep", shortLabel: "Sleep", icon: "☾" },
+  { id: "overview", href: "/dashboard", label: "Dashboard", icon: "⌂" },
+  { id: "sleep", href: "/sleep", label: "Sleep", icon: "☾" },
 ];
+
+function navigationClass(active: boolean): string {
+  return [
+    "flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors",
+    active
+      ? "bg-accent-soft text-accent-soft-foreground"
+      : "text-muted hover:bg-surface-tertiary hover:text-foreground",
+  ].join(" ");
+}
 
 export function DashboardShell({
   activeView,
@@ -32,91 +42,133 @@ export function DashboardShell({
   syncLabel,
 }: DashboardShellProps) {
   return (
-    <div className="dashboardShell">
-      <aside className="sideRail">
-        <div className="brandBlock">
-          <span className="brandMark" aria-hidden="true">
-            LS
-          </span>
-          <div>
-            <strong>LIFESTATS</strong>
-            <small>Google Health companion</small>
+    <div className="min-h-screen">
+      <aside className="fixed inset-y-0 left-0 z-20 w-64 border-r border-border max-lg:hidden">
+        <Surface className="flex h-full flex-col rounded-none" variant="secondary">
+          <div className="flex items-center gap-3 p-5">
+            <Avatar color="accent" size="sm">
+              <Avatar.Fallback>LS</Avatar.Fallback>
+            </Avatar>
+            <div className="min-w-0">
+              <Typography weight="bold">LifeStats</Typography>
+              <Typography className="block" color="muted" type="body-xs">
+                Google Health companion
+              </Typography>
+            </div>
           </div>
-        </div>
 
-        <div className="railStatus" aria-label={`Google Health status: ${syncLabel}`}>
-          <span>Google Health</span>
-          <strong>
-            <i aria-hidden="true" />
-            {syncLabel}
-          </strong>
-        </div>
+          <Separator />
 
-        <nav className="railNavigation" aria-label="Primary">
-          {navigation.map((item) => (
+          <div className="grid gap-2 p-5" aria-label={`Google Health status: ${syncLabel}`}>
+            <Typography color="muted" type="body-xs">
+              Google Health
+            </Typography>
+            <Chip color="success" size="sm" variant="soft">
+              <Chip.Label>{syncLabel}</Chip.Label>
+            </Chip>
+          </div>
+
+          <nav className="grid flex-1 content-start gap-1 px-3 py-2" aria-label="Primary">
+            {navigation.map((item) => (
+              <Link
+                aria-current={activeView === item.id ? "page" : undefined}
+                className={navigationClass(activeView === item.id)}
+                href={item.href}
+                key={item.id}
+              >
+                <span className="text-lg" aria-hidden="true">
+                  {item.icon}
+                </span>
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="px-3 pb-3">
             <Link
-              aria-current={activeView === item.id ? "page" : undefined}
-              className={activeView === item.id ? "active" : undefined}
-              href={item.href}
-              key={item.id}
+              aria-current={activeView === "agents" ? "page" : undefined}
+              className={navigationClass(activeView === "agents")}
+              href="/settings/agent-access"
             >
-              <span aria-hidden="true">{item.icon}</span>
-              {item.label}
+              <span className="text-lg" aria-hidden="true">
+                ⌘
+              </span>
+              Agent access
             </Link>
-          ))}
-        </nav>
-
-        <Link
-          aria-current={activeView === "agents" ? "page" : undefined}
-          className={activeView === "agents" ? "agentAccessLink active" : "agentAccessLink"}
-          href="/settings/agent-access"
-        >
-          <span aria-hidden="true">⌘</span>
-          Agent access
-        </Link>
-
-        <footer className="sidebarFooter">
-          <span className="avatar" aria-hidden="true">
-            {email.charAt(0).toUpperCase()}
-          </span>
-          <div className="accountIdentity">
-            <strong title={email}>{email}</strong>
-            <small>Private account</small>
           </div>
-          <button className="signOutButton" disabled={logoutPending} onClick={onLogout}>
-            {logoutPending ? "Wait…" : "Sign out"}
-          </button>
-        </footer>
+
+          <Separator />
+
+          <footer className="flex items-center gap-3 p-4">
+            <Avatar size="sm">
+              <Avatar.Fallback>{email.charAt(0).toUpperCase()}</Avatar.Fallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <Typography className="block" truncate type="body-xs" weight="semibold">
+                {email}
+              </Typography>
+              <Typography className="block" color="muted" type="body-xs">
+                Private account
+              </Typography>
+            </div>
+            <AppButton
+              className="min-h-8 px-2.5"
+              isDisabled={logoutPending}
+              onPress={onLogout}
+              tone="secondary"
+            >
+              {logoutPending ? "Wait…" : "Sign out"}
+            </AppButton>
+          </footer>
+        </Surface>
       </aside>
 
-      <header className="mobileHeader">
-        <span className="brandMark" aria-hidden="true">
-          LS
-        </span>
-        <strong>LIFESTATS</strong>
-        <div className="mobileUtilities">
-          <span className="mobileSync">{syncLabel}</span>
-          <Link aria-label="Agent access" href="/settings/agent-access">
-            ⌘
-          </Link>
-        </div>
-      </header>
+      <Surface
+        className="fixed inset-x-0 top-0 z-20 flex h-16 items-center gap-3 rounded-none border-b border-border px-4 lg:hidden"
+        variant="secondary"
+      >
+        <Avatar color="accent" size="sm">
+          <Avatar.Fallback>LS</Avatar.Fallback>
+        </Avatar>
+        <Typography className="flex-1" weight="bold">
+          LifeStats
+        </Typography>
+        <Chip color="success" size="sm" variant="soft">
+          <Chip.Label>{syncLabel}</Chip.Label>
+        </Chip>
+        <Link
+          className="grid size-10 place-items-center rounded-xl text-lg text-muted hover:bg-surface-tertiary"
+          aria-label="Agent access"
+          href="/settings/agent-access"
+        >
+          ⌘
+        </Link>
+      </Surface>
 
-      <main className="dashboardMain">{children}</main>
+      <main className="min-h-screen px-7 py-9 pb-24 lg:ml-64 max-lg:pt-24 max-sm:px-4">
+        {children}
+      </main>
 
-      <nav className="mobileNavigation" aria-label="Primary">
+      <Surface
+        className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-2 rounded-none border-t border-border pb-[env(safe-area-inset-bottom)] lg:hidden"
+        variant="secondary"
+      >
         {navigation.map((item) => (
           <Link
             aria-current={activeView === item.id ? "page" : undefined}
-            className={activeView === item.id ? "active" : undefined}
+            className={`grid min-h-16 place-items-center content-center gap-1 text-xs ${
+              activeView === item.id ? "text-accent" : "text-muted"
+            }`}
             href={item.href}
             key={item.id}
           >
-            <span aria-hidden="true">{item.icon}</span>
-            {item.shortLabel}
+            <span className="text-lg" aria-hidden="true">
+              {item.icon}
+            </span>
+            {item.label}
           </Link>
         ))}
-      </nav>
+      </Surface>
     </div>
   );
 }
