@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import Settings, get_settings
 from src.core.dependencies import database_session
-from src.core.errors import AuthenticationError, ConflictError, NotFoundError
+from src.core.errors import AuthenticationError, ConflictError, NotFoundError, RateLimitedError
 from src.modules.auth.dependencies import (
     Principal,
     current_principal,
@@ -44,6 +44,8 @@ def translate_auth_error(exc: Exception) -> HTTPException:
         return HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
     if isinstance(exc, ConflictError):
         return HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    if isinstance(exc, RateLimitedError):
+        return HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, str(exc))
     return HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc))
 
 
@@ -73,7 +75,7 @@ async def login(
 ) -> SessionResponse:
     try:
         issued = await AuthService(db, settings).login(payload.email, payload.password)
-    except AuthenticationError as exc:
+    except (AuthenticationError, RateLimitedError) as exc:
         raise translate_auth_error(exc) from exc
     set_session_cookies(response, issued, settings)
     return SessionResponse(user={"email": issued.user.email}, csrf_token=issued.csrf_token)

@@ -1,17 +1,40 @@
 import secrets
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import timedelta
 from hashlib import sha256
+from time import monotonic
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import Settings
-from src.core.errors import AuthenticationError, ConflictError, NotFoundError
+from src.core.errors import AuthenticationError, ConflictError, NotFoundError, RateLimitedError
 from src.core.security import hash_password, verify_password
 from src.core.time import utc_now
 from src.modules.auth.models import Session, User
+
+_LOGIN_FAILURE_LIMIT = 5
+_LOGIN_FAILURE_WINDOW_SECONDS = 15 * 60
+_login_failures: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _login_rate_limited(key: str) -> bool:
+    now = monotonic()
+    cutoff = now - _LOGIN_FAILURE_WINDOW_SECONDS
+    attempts = _login_failures[key]
+    while attempts and attempts[0] <= cutoff:
+        attempts.popleft()
+    return len(attempts) >= _LOGIN_FAILURE_LIMIT
+
+
+def _record_login_failure(key: str) -> None:
+    _login_failures[key].append(monotonic())
+
+
+def _clear_login_failures(key: str) -> None:
+    _login_failures.pop(key, None)
 
 
 @dataclass(frozen=True)
@@ -53,9 +76,14 @@ class AuthService:
         return await self._issue(user)
 
     async def login(self, email: str, password: str) -> IssuedSession:
-        user = await self.db.scalar(select(User).where(User.email == email.lower().strip()))
+        normalized = email.lower().strip()
+        if _login_rate_limited(normalized):
+            raise RateLimitedError("Too many failed login attempts. Try again later.")
+        user = await self.db.scalar(select(User).where(User.email == normalized))
         if user is None or not verify_password(password, user.password_hash):
+            _record_login_failure(normalized)
             raise AuthenticationError("Invalid email or password")
+        _clear_login_failures(normalized)
         return await self._issue(user)
 
     async def logout(self, token: str | None) -> None:

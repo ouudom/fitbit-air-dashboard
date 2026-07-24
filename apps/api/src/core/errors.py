@@ -12,3 +12,7 @@ class ConflictError(DomainError):
 
 class AuthenticationError(DomainError):
     pass
+
+
+class RateLimitedError(DomainError):
+    pass
