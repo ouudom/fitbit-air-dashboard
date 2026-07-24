@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { AppButton } from "@/components/ui/AppButton";
 
-export type DashboardView = "overview" | "fitness" | "sleep" | "settings";
+export type DashboardView = "overview" | "steps" | "sleep" | "settings";
 
 type DashboardShellProps = {
   activeView: DashboardView;
@@ -21,7 +21,7 @@ const navigation: Array<{
   icon: string;
 }> = [
   { id: "overview", href: "/dashboard", label: "Today", icon: "⌂" },
-  { id: "fitness", href: "/fitness", label: "Fitness", icon: "↗" },
+  { id: "steps", href: "/steps", label: "Steps", icon: "↗" },
   { id: "sleep", href: "/sleep", label: "Sleep", icon: "☾" },
 ];
 

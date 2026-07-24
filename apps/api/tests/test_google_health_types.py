@@ -26,7 +26,7 @@ def test_non_reconciled_types_use_list() -> None:
 
 
 def test_rollup_only_types_use_daily_rollup() -> None:
-    expected = {"calories-in-heart-rate-zone", "total-calories"}
+    expected = {"calories-in-heart-rate-zone", "steps", "total-calories"}
     actual = {
         item.endpoint_id for item in DATA_TYPES if item.fetch_method is FetchMethod.DAILY_ROLLUP
     }
@@ -69,9 +69,8 @@ def test_registry_declares_supported_operations() -> None:
         "export_exercise_tcx",
     )
     assert DATA_TYPE_REGISTRY["steps"].supported_operations == (
-        "reconcile",
-        "rollup",
         "daily_rollup",
+        "rollup",
     )
 
 

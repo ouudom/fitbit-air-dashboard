@@ -19,7 +19,7 @@ import {
   rangeLabel,
 } from "../insights";
 
-export function FitnessOverview({
+export function StepsOverview({
   date,
   onDateChange,
 }: {
@@ -65,7 +65,7 @@ export function FitnessOverview({
           <AppTextField
             className="w-40 max-sm:basis-full"
             inputProps={{
-              "aria-label": "Fitness end date",
+              "aria-label": "Steps end date",
               onChange: (event) => onDateChange(event.target.value),
               type: "date",
               value: date,
@@ -74,7 +74,7 @@ export function FitnessOverview({
           />
         }
         description="Source-backed step totals and activity patterns."
-        eyebrow="Google Health fitness"
+        eyebrow="Google Health steps"
         title="Steps"
       />
 

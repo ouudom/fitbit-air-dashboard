@@ -1,5 +1,5 @@
-import { DashboardRoute } from "@/modules/dashboard/DashboardRoute";
+import { redirect } from "next/navigation";
 
-export default function FitnessPage() {
-  return <DashboardRoute view="fitness" />;
+export default function LegacyFitnessRedirect() {
+  redirect("/steps");
 }

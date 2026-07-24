@@ -417,6 +417,7 @@ DATA_TYPES = (
         "steps",
         RecordKind.INTERVAL,
         ACTIVITY_SCOPE,
+        fetch_method=FetchMethod.DAILY_ROLLUP,
         tier=PollingTier.ACTIVITY,
         true_zero=True,
     ),

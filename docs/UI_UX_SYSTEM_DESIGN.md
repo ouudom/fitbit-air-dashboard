@@ -22,7 +22,7 @@ Exactly four primary destinations:
 | Destination | Route | Purpose |
 | --- | --- | --- |
 | Today | `/dashboard` | Latest focus metrics, recent sessions, sync freshness |
-| Fitness | `/fitness` | Activity, energy, distance, zone minutes, workouts |
+| Steps | `/steps` | Daily step totals and activity patterns |
 | Sleep | `/sleep` | Sessions, duration, stages, schedule, supported trends |
 | Health | `/health` | Vitals, heart, measurements, nutrition, hydration |
 
@@ -236,7 +236,7 @@ Avoid medical conclusions, motivational pressure, tactical language, and invente
 
 A frontend change is complete when:
 
-- It fits Today, Fitness, Sleep, or Health.
+- It fits Today, Steps, Sleep, or Health.
 - It uses shared tokens and components.
 - Loading, empty, stale, unsupported, permission, and error states are handled where applicable.
 - Mobile and desktop layouts work.
@@ -244,4 +244,3 @@ A frontend change is complete when:
 - Source and freshness are not ambiguous.
 - No local projection is presented as authoritative Google Health data.
 - `npm run build` and `npx tsc --noEmit` pass.
-

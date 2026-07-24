@@ -60,6 +60,23 @@ async def seed_sync_jobs(
     scheduled_at = (now or utc_now()).astimezone(UTC)
     for data_type in DATA_TYPES:
         enabled = scope_granted(connection.scopes, data_type.scope)
+        await db.execute(
+            update(GoogleHealthSyncJob)
+            .where(
+                GoogleHealthSyncJob.connection_id == connection.id,
+                GoogleHealthSyncJob.data_type == data_type.endpoint_id,
+                GoogleHealthSyncJob.fetch_method != data_type.fetch_method.value,
+            )
+            .values(
+                enabled=False,
+                status="completed",
+                error="fetch_method_superseded",
+                lease_until=None,
+                next_page_token=None,
+                range_start=None,
+                range_end=None,
+            )
+        )
         statement = (
             insert(GoogleHealthSyncJob)
             .values(

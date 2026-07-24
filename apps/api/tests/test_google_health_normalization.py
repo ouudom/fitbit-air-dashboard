@@ -39,6 +39,35 @@ def test_daily_rollup_identity_uses_civil_date_and_source() -> None:
     assert record.source_family == "users/me/dataSourceFamilies/all-sources"
 
 
+def test_unnamed_intervals_on_same_day_use_distinct_time_identities() -> None:
+    data_type = DATA_TYPE_REGISTRY["distance"]
+    first = {
+        "distance": {
+            "meters": 50,
+            "interval": {
+                "startTime": "2026-07-23T00:10:00Z",
+                "endTime": "2026-07-23T00:11:00Z",
+                "civilStartTime": {"date": {"year": 2026, "month": 7, "day": 23}},
+            },
+        }
+    }
+    second = {
+        "distance": {
+            "meters": 75,
+            "interval": {
+                "startTime": "2026-07-23T00:20:00Z",
+                "endTime": "2026-07-23T00:21:00Z",
+                "civilStartTime": {"date": {"year": 2026, "month": 7, "day": 23}},
+            },
+        }
+    }
+
+    assert (
+        normalize_record(data_type, first).identity_hash
+        != normalize_record(data_type, second).identity_hash
+    )
+
+
 def test_record_without_stable_identity_is_rejected() -> None:
     with pytest.raises(ValueError, match="stable identity"):
         normalize_record(DATA_TYPE_REGISTRY["weight"], {"weight": {"weightGrams": 72_400}})

@@ -85,3 +85,50 @@ async def test_nutrition_log_uses_explicit_civil_datetime_filter() -> None:
             'AND nutrition_log.sample_time.civil_time < "2026-07-25T00:00:00"'
         ),
     }
+
+
+@pytest.mark.asyncio
+async def test_steps_use_one_day_civil_rollups() -> None:
+    client = GoogleHealthClient(AsyncMock(), Settings(), user_id=1)
+    request = AsyncMock(
+        return_value={
+            "rollupDataPoints": [
+                {
+                    "civilStartTime": {
+                        "date": {"year": 2026, "month": 7, "day": 23},
+                        "time": {},
+                    },
+                    "civilEndTime": {
+                        "date": {"year": 2026, "month": 7, "day": 24},
+                        "time": {},
+                    },
+                    "steps": {"countSum": "8234"},
+                }
+            ]
+        }
+    )
+    with patch.object(client, "request", request):
+        pages = [
+            page
+            async for page in client.point_pages(
+                DATA_TYPE_REGISTRY["steps"],
+                date(2026, 7, 23),
+                date(2026, 7, 23),
+            )
+        ]
+    await client.close()
+
+    assert pages[0][0][0]["steps"]["countSum"] == "8234"
+    assert request.await_args.args == (
+        "POST",
+        "users/me/dataTypes/steps/dataPoints:dailyRollUp",
+    )
+    assert request.await_args.kwargs["json"] == {
+        "range": {
+            "start": {"date": {"year": 2026, "month": 7, "day": 23}, "time": {}},
+            "end": {"date": {"year": 2026, "month": 7, "day": 24}, "time": {}},
+        },
+        "windowSizeDays": 1,
+        "pageSize": 1000,
+        "dataSourceFamily": "users/me/dataSourceFamilies/all-sources",
+    }

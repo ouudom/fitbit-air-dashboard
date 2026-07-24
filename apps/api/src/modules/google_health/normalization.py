@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any
 
-from src.modules.google_health.registry import DataType
+from src.modules.google_health.registry import DataType, RecordKind
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +100,7 @@ def normalize_record(data_type: DataType, item: dict[str, Any]) -> NormalizedRec
     )
     identity = _identity_parts(
         data_type.endpoint_id,
+        data_type.record_kind,
         provider_name,
         source_family,
         record_date,
@@ -122,6 +123,7 @@ def normalize_record(data_type: DataType, item: dict[str, Any]) -> NormalizedRec
 
 def _identity_parts(
     endpoint_id: str,
+    record_kind: RecordKind,
     provider_name: str | None,
     source_family: str | None,
     record_date: date | None,
@@ -130,13 +132,15 @@ def _identity_parts(
 ) -> str:
     if provider_name:
         return f"name|{endpoint_id}|{provider_name}"
-    if record_date:
+    if record_kind in {RecordKind.DAILY, RecordKind.ROLLUP} and record_date:
         return f"date|{endpoint_id}|{source_family or ''}|{record_date.isoformat()}"
     if started_at:
         return (
             f"time|{endpoint_id}|{source_family or ''}|{started_at.isoformat()}|"
             f"{ended_at.isoformat() if ended_at else ''}"
         )
+    if record_date:
+        return f"date|{endpoint_id}|{source_family or ''}|{record_date.isoformat()}"
     raise ValueError(f"{endpoint_id} record has no stable identity fields")
 
 

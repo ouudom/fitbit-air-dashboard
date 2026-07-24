@@ -33,7 +33,7 @@ const scopeOptions: ScopeOption[] = [
   },
   {
     scope: "fitness:read",
-    label: "Fitness",
+    label: "Steps and activity",
     detail: "Activity, exercise, and trends",
     group: "Read access",
   },
@@ -246,9 +246,9 @@ export function AgentAccess() {
             <form className="grid gap-5" onSubmit={submit}>
               <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
                 <AppTextField
+                  defaultValue="Codex"
                   inputProps={{
                     autoComplete: "off",
-                    defaultValue: "Codex",
                     maxLength: 100,
                   }}
                   isRequired
@@ -289,12 +289,12 @@ export function AgentAccess() {
                               <Checkbox.Indicator />
                             </Checkbox.Control>
                             <span className="min-w-0">
-                              <Typography className="block" type="body-sm" weight="semibold">
+                              <span className="block text-sm font-semibold">
                                 {option.label}
-                              </Typography>
-                              <Typography className="block" color="muted" type="body-xs">
+                              </span>
+                              <span className="block text-xs text-muted">
                                 {option.detail}
-                              </Typography>
+                              </span>
                             </span>
                           </Checkbox.Content>
                         </Checkbox>
