@@ -13,10 +13,11 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { api } from "@/lib/api";
 import type { Dashboard, Insights } from "@/lib/types";
 import {
+  calendarRangeEnd,
+  DateRangeControls,
   dateTick,
   insightsPath,
   type RangeKey,
-  RangeTabs,
   rangeLabel,
 } from "../insights";
 
@@ -40,26 +41,52 @@ export function SleepOverview({
   date: string;
 }) {
   const [range, setRange] = useState<RangeKey>("day");
+  const [endDate, setEndDate] = useState(date);
   const insights = useQuery({
-    queryKey: ["insights", range, date],
-    queryFn: () => api<Insights>(insightsPath(date, range)),
+    queryKey: ["insights", range, endDate],
+    queryFn: () => api<Insights>(insightsPath(endDate, range)),
     enabled: range !== "day",
   });
-  const detail = data.sleep;
-  const sessions = data.timeline.filter((item) => item.kind === "sleep");
+  const selectedDashboard = useQuery({
+    queryKey: ["dashboard", endDate],
+    queryFn: () => api<Dashboard>(`/dashboard?date=${endDate}`),
+    enabled: range === "day" && endDate !== date,
+  });
+  const dayData = endDate === date ? data : selectedDashboard.data;
+  const detail = dayData?.sleep;
+  const sessions = dayData?.timeline.filter((item) => item.kind === "sleep") ?? [];
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-6">
       <PageHeader title="Sleep" />
 
-      <RangeTabs onChange={setRange} value={range} />
+      <DateRangeControls
+        end={endDate}
+        max={date}
+        onEndChange={setEndDate}
+        onRangeChange={(nextRange) => {
+          setRange(nextRange);
+          setEndDate(calendarRangeEnd(endDate, nextRange, date));
+        }}
+        range={range}
+      />
 
       {range === "day" ? (
         <>
-          {detail ? (
+          {selectedDashboard.isPending && endDate !== date ? (
+            <Card variant="secondary">
+              <Card.Content className="min-h-80 animate-pulse" />
+            </Card>
+          ) : selectedDashboard.isError && endDate !== date ? (
+            <AppAlert
+              message={selectedDashboard.error.message}
+              title="Sleep day unavailable"
+            />
+          ) : detail && dayData ? (
             <>
-              <SleepHero detail={detail} timezone={data.timezone} />
-              <SleepTimeline detail={detail} timezone={data.timezone} />
+              <SleepHero detail={detail} timezone={dayData.timezone} />
+              <SleepTimeline detail={detail} timezone={dayData.timezone} />
+              <SleepingHeartRate detail={detail} timezone={dayData.timezone} />
               <SleepFacts detail={detail} />
             </>
           ) : (
@@ -73,7 +100,7 @@ export function SleepOverview({
               </Card.Content>
             </Card>
           )}
-          <SleepSessions sessions={sessions} timezone={data.timezone} />
+          {dayData && <SleepSessions sessions={sessions} timezone={dayData.timezone} />}
         </>
       ) : (
         <>
@@ -305,7 +332,7 @@ function SleepTimeline({ detail, timezone }: { detail: SleepDetail; timezone: st
               <Chip.Label>{detail.stages.length} segments</Chip.Label>
             </Chip>
           }
-          eyebrow="Sleep composition"
+          // eyebrow="Sleep composition"
           id="sleep-stages-title"
           title="Stage timeline"
         />
@@ -446,6 +473,149 @@ function SleepFacts({ detail }: { detail: SleepDetail }) {
   );
 }
 
+function SleepingHeartRate({
+  detail,
+  timezone,
+}: {
+  detail: SleepDetail;
+  timezone: string;
+}) {
+  const chartData: { label: string; value: number | null; detail: string }[] = [];
+  detail.heartRateSamples.forEach((sample, index) => {
+    const previous = detail.heartRateSamples[index - 1];
+    if (
+      previous &&
+      new Date(sample.observedAt).getTime() - new Date(previous.observedAt).getTime() >
+        15 * 60 * 1000
+    ) {
+      chartData.push({
+        detail: "No sample",
+        label: formatTime(
+          new Date(new Date(previous.observedAt).getTime() + 15 * 60 * 1000).toISOString(),
+          timezone,
+        ),
+        value: null,
+      });
+    }
+    chartData.push({
+      detail: new Date(sample.observedAt).toLocaleString([], { timeZone: timezone }),
+      label: formatTime(sample.observedAt, timezone),
+      value: sample.beatsPerMinute,
+    });
+  });
+
+  return (
+    <Card variant="default" aria-labelledby="sleeping-heart-rate-title">
+      <Card.Header>
+        <SectionHeader
+          action={
+            <Chip size="sm" variant="soft">
+              <Chip.Label>{detail.heartRateFreshness}</Chip.Label>
+            </Chip>
+          }
+          eyebrow={`${formatTime(detail.startAt, timezone)}–${formatTime(detail.endAt, timezone)}`}
+          id="sleeping-heart-rate-title"
+          title="Sleeping heart rate"
+        />
+      </Card.Header>
+      <Card.Content className="grid gap-6">
+        {detail.heartRateSamples.length ? (
+          <>
+            <div className="flex flex-wrap items-end gap-2">
+              <span className="text-5xl font-bold tracking-[-0.04em] tabular-nums max-sm:text-4xl">
+                {formatBpm(detail.averageSleepingHeartRate)}
+              </span>
+              <span className="pb-1 text-sm font-semibold text-muted">average</span>
+            </div>
+            <EvilAnimatedLineChart
+              data={chartData}
+              formatValue={(value) => `${Math.round(value)}`}
+              reference={detail.restingHeartRate ?? undefined}
+              valueLabel="bpm"
+            />
+            <div className="grid gap-4" aria-label="Compared with resting heart rate">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <Typography weight="semibold">Compared with resting heart rate</Typography>
+                <Typography color="muted" type="body-sm">
+                  {formatBpm(detail.restingHeartRate)}
+                </Typography>
+              </div>
+              {detail.percentAboveResting == null ||
+              detail.percentBelowResting == null ? (
+                <Typography.Paragraph color="muted" size="sm">
+                  Resting comparison unavailable.
+                </Typography.Paragraph>
+              ) : (
+                <>
+                  <ComparisonBar
+                    label="Above"
+                    value={detail.percentAboveResting}
+                    variant="above"
+                  />
+                  <ComparisonBar
+                    label="At or below"
+                    value={detail.percentBelowResting}
+                    variant="below"
+                  />
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <EmptyContent
+            description="No Google Health heart-rate samples were synced during this sleep period."
+            icon="♥"
+            title="Sleeping heart rate unavailable"
+          />
+        )}
+      </Card.Content>
+      <Card.Footer>
+        <Typography.Paragraph color="muted" size="xs">
+          {detail.heartRateDerivation}
+        </Typography.Paragraph>
+      </Card.Footer>
+    </Card>
+  );
+}
+
+function ComparisonBar({
+  label,
+  value,
+  variant,
+}: {
+  label: string;
+  value: number;
+  variant: "above" | "below";
+}) {
+  return (
+    <div className="grid gap-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <Typography color="muted" type="body-sm">
+          {label}
+        </Typography>
+        <Typography className="tabular-nums" weight="semibold">
+          {formatPercent(value)}
+        </Typography>
+      </div>
+      <div
+        aria-label={`${label}: ${formatPercent(value)}`}
+        aria-valuemax={100}
+        aria-valuemin={0}
+        aria-valuenow={Math.round(value)}
+        className="h-4 overflow-hidden rounded-full bg-[var(--border)]"
+        role="progressbar"
+      >
+        <div
+          className={`h-full rounded-full ${
+            variant === "above" ? "bg-[var(--sleep-rem)]" : "bg-[var(--sleep-light)]"
+          }`}
+          style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function SleepSessions({
   sessions,
   timezone,
@@ -529,6 +699,10 @@ function formatMinutes(value: number | null | undefined): string {
 
 function formatPercent(value: number | null | undefined): string {
   return value == null ? "Unavailable" : `${Math.round(value)}%`;
+}
+
+function formatBpm(value: number | null | undefined): string {
+  return value == null ? "Unavailable" : `${Math.round(value)} bpm`;
 }
 
 function formatMinutesNumber(value: number): string {

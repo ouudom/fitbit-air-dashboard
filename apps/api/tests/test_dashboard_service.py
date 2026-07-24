@@ -7,6 +7,7 @@ from src.modules.dashboard.service import (
     _hydration_milliliters,
     _insights_from_records,
     _sleep_detail_from_record,
+    _sleep_heart_rate_detail,
 )
 
 
@@ -77,6 +78,52 @@ def test_sleep_detail_requires_session_interval() -> None:
     )
 
     assert _sleep_detail_from_record(record) is None
+
+
+def test_sleep_heart_rate_uses_samples_and_excludes_large_gaps() -> None:
+    synced_at = datetime(2026, 7, 24, 9, 45, tzinfo=UTC)
+    records = [
+        SimpleNamespace(
+            started_at=datetime(2026, 7, 23, 18, 0, tzinfo=UTC),
+            last_synced_at=synced_at,
+            raw_payload={"heartRate": {"beatsPerMinute": 50}},
+        ),
+        SimpleNamespace(
+            started_at=datetime(2026, 7, 23, 18, 10, tzinfo=UTC),
+            last_synced_at=synced_at,
+            raw_payload={"heartRate": {"beatsPerMinute": 70}},
+        ),
+        SimpleNamespace(
+            started_at=datetime(2026, 7, 23, 18, 20, tzinfo=UTC),
+            last_synced_at=synced_at,
+            raw_payload={"heartRate": {"beatsPerMinute": 55}},
+        ),
+        SimpleNamespace(
+            started_at=datetime(2026, 7, 23, 19, 0, tzinfo=UTC),
+            last_synced_at=synced_at,
+            raw_payload={"heartRate": {"beatsPerMinute": 90}},
+        ),
+    ]
+    resting = SimpleNamespace(
+        last_synced_at=synced_at,
+        raw_payload={"dailyRestingHeartRate": {"beatsPerMinute": 60}},
+    )
+
+    detail = _sleep_heart_rate_detail(records, resting)
+
+    assert detail["averageSleepingHeartRate"] == 66.2
+    assert detail["restingHeartRate"] == 60.0
+    assert detail["percentAboveResting"] == 50.0
+    assert detail["percentBelowResting"] == 50.0
+    assert len(detail["heartRateSamples"]) == 4
+
+
+def test_sleep_heart_rate_is_unavailable_without_samples() -> None:
+    detail = _sleep_heart_rate_detail([], None)
+
+    assert detail["heartRateAvailability"] == "not-synced"
+    assert detail["averageSleepingHeartRate"] is None
+    assert detail["percentAboveResting"] is None
 
 
 def test_insights_aggregate_steps_and_sleep_by_wake_date() -> None:

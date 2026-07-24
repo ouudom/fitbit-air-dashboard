@@ -46,6 +46,11 @@ class SleepStageSummaryResponse(BaseModel):
     count: int
 
 
+class SleepHeartRateSampleResponse(BaseModel):
+    observedAt: datetime
+    beatsPerMinute: float
+
+
 class SleepDetailResponse(BaseModel):
     sessionId: str
     startAt: datetime
@@ -58,6 +63,14 @@ class SleepDetailResponse(BaseModel):
     sleepEfficiency: float | None
     stages: list[SleepStageSegmentResponse]
     stageSummary: list[SleepStageSummaryResponse]
+    heartRateSamples: list[SleepHeartRateSampleResponse]
+    averageSleepingHeartRate: float | None
+    restingHeartRate: float | None
+    percentAboveResting: float | None
+    percentBelowResting: float | None
+    heartRateAvailability: str
+    heartRateFreshness: str
+    heartRateDerivation: str
     source: str
     freshness: str
     availability: str

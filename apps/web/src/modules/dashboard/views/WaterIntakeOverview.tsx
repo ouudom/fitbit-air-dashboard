@@ -12,19 +12,21 @@ import { api } from "@/lib/api";
 import type { Insights } from "@/lib/types";
 import {
   completeDailySeries,
+  calendarRangeEnd,
+  DateRangeControls,
   dateTick,
   displaysMissingDays,
   insightsPath,
   type RangeKey,
-  RangeTabs,
   rangeLabel,
 } from "../insights";
 
 export function WaterIntakeOverview({ date }: { date: string }) {
   const [range, setRange] = useState<RangeKey>("week");
+  const [endDate, setEndDate] = useState(date);
   const insights = useQuery({
-    queryKey: ["insights", range, date],
-    queryFn: () => api<Insights>(insightsPath(date, range)),
+    queryKey: ["insights", range, endDate],
+    queryFn: () => api<Insights>(insightsPath(endDate, range)),
   });
   const points = insights.data?.water ?? [];
   const dayEntries =
@@ -32,7 +34,7 @@ export function WaterIntakeOverview({ date }: { date: string }) {
       (entry) =>
         new Date(entry.startedAt).toLocaleDateString("en-CA", {
           timeZone: insights.data?.timezone,
-        }) === date,
+        }) === endDate,
     ) ?? [];
   const values = points.map((point) => point.value);
   const total = values.reduce((sum, value) => sum + value, 0);
@@ -68,7 +70,16 @@ export function WaterIntakeOverview({ date }: { date: string }) {
     <div className="mx-auto grid w-full max-w-6xl gap-6">
       <PageHeader title="Water intake" />
 
-      <RangeTabs onChange={setRange} value={range} />
+      <DateRangeControls
+        end={endDate}
+        max={date}
+        onEndChange={setEndDate}
+        onRangeChange={(nextRange) => {
+          setRange(nextRange);
+          setEndDate(calendarRangeEnd(endDate, nextRange, date));
+        }}
+        range={range}
+      />
 
       {insights.isPending && (
         <Card variant="secondary">

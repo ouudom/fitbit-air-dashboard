@@ -12,19 +12,21 @@ import { api } from "@/lib/api";
 import type { Insights } from "@/lib/types";
 import {
   completeDailySeries,
+  calendarRangeEnd,
+  DateRangeControls,
   dateTick,
   displaysMissingDays,
   insightsPath,
   type RangeKey,
-  RangeTabs,
   rangeLabel,
 } from "../insights";
 
 export function StepsOverview({ date }: { date: string }) {
   const [range, setRange] = useState<RangeKey>("week");
+  const [endDate, setEndDate] = useState(date);
   const insights = useQuery({
-    queryKey: ["insights", range, date],
-    queryFn: () => api<Insights>(insightsPath(date, range)),
+    queryKey: ["insights", range, endDate],
+    queryFn: () => api<Insights>(insightsPath(endDate, range)),
   });
   const points = insights.data?.steps ?? [];
   const buckets = insights.data?.stepBuckets ?? [];
@@ -61,7 +63,16 @@ export function StepsOverview({ date }: { date: string }) {
     <div className="mx-auto grid w-full max-w-6xl gap-6">
       <PageHeader title="Steps" />
 
-      <RangeTabs onChange={setRange} value={range} />
+      <DateRangeControls
+        end={endDate}
+        max={date}
+        onEndChange={setEndDate}
+        onRangeChange={(nextRange) => {
+          setRange(nextRange);
+          setEndDate(calendarRangeEnd(endDate, nextRange, date));
+        }}
+        range={range}
+      />
 
       {insights.isPending && (
         <Card variant="secondary">

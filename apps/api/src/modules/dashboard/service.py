@@ -223,7 +223,50 @@ class DashboardService:
             ),
             None,
         )
-        return _sleep_detail_from_record(row) if row else None
+        if row is None:
+            return None
+        detail = _sleep_detail_from_record(row)
+        if detail is None:
+            return None
+
+        start_at = detail["startAt"]
+        end_at = detail["endAt"]
+        assert isinstance(start_at, datetime)
+        assert isinstance(end_at, datetime)
+        heart_rate_query = (
+            select(GoogleHealthRecord)
+            .join(
+                GoogleHealthConnection,
+                GoogleHealthConnection.id == GoogleHealthRecord.connection_id,
+            )
+            .where(
+                GoogleHealthConnection.user_id == user_id,
+                GoogleHealthRecord.data_type == "heart-rate",
+                GoogleHealthRecord.deleted_at.is_(None),
+                GoogleHealthRecord.started_at >= start_at,
+                GoogleHealthRecord.started_at <= end_at,
+            )
+            .order_by(GoogleHealthRecord.started_at)
+        )
+        heart_rate_records = list((await self.db.scalars(heart_rate_query)).all())
+        resting_query = (
+            select(GoogleHealthRecord)
+            .join(
+                GoogleHealthConnection,
+                GoogleHealthConnection.id == GoogleHealthRecord.connection_id,
+            )
+            .where(
+                GoogleHealthConnection.user_id == user_id,
+                GoogleHealthRecord.data_type == "daily-resting-heart-rate",
+                GoogleHealthRecord.deleted_at.is_(None),
+                GoogleHealthRecord.record_date == day,
+            )
+            .order_by(GoogleHealthRecord.last_synced_at.desc())
+            .limit(1)
+        )
+        resting_record = await self.db.scalar(resting_query)
+        detail.update(_sleep_heart_rate_detail(heart_rate_records, resting_record))
+        return detail
 
     async def _sync(self, user_id: int) -> list[dict[str, object]]:
         query = (
@@ -349,6 +392,7 @@ def _sleep_detail_from_record(record: GoogleHealthRecord) -> dict[str, object] |
         "sleepEfficiency": efficiency,
         "stages": stages,
         "stageSummary": ordered_summaries,
+        **_sleep_heart_rate_detail([], None),
         "source": "Google Health",
         "freshness": _record_freshness(record.last_synced_at),
         "availability": "available",
@@ -357,6 +401,74 @@ def _sleep_detail_from_record(record: GoogleHealthRecord) -> dict[str, object] |
             "and minutes in the sleep period."
         ),
         "lastSyncedAt": record.last_synced_at,
+    }
+
+
+def _sleep_heart_rate_detail(
+    records: list[GoogleHealthRecord],
+    resting_record: GoogleHealthRecord | None,
+) -> dict[str, object]:
+    samples: list[tuple[datetime, float]] = []
+    for record in records:
+        if record.started_at is None:
+            continue
+        beats_per_minute = extract_number(record.raw_payload)
+        if beats_per_minute is None or beats_per_minute <= 0:
+            continue
+        samples.append((record.started_at, beats_per_minute))
+    samples.sort(key=lambda sample: sample[0])
+
+    resting_heart_rate = (
+        extract_number(resting_record.raw_payload) if resting_record is not None else None
+    )
+    if resting_heart_rate is not None and resting_heart_rate <= 0:
+        resting_heart_rate = None
+
+    average = (
+        round(sum(beats_per_minute for _, beats_per_minute in samples) / len(samples), 1)
+        if samples
+        else None
+    )
+    above_seconds = 0.0
+    below_seconds = 0.0
+    if resting_heart_rate is not None:
+        for (observed_at, beats_per_minute), (next_observed_at, _) in zip(
+            samples, samples[1:], strict=False
+        ):
+            duration = (next_observed_at - observed_at).total_seconds()
+            if duration <= 0 or duration > 15 * 60:
+                continue
+            if beats_per_minute > resting_heart_rate:
+                above_seconds += duration
+            else:
+                below_seconds += duration
+    compared_seconds = above_seconds + below_seconds
+    percent_above = round(above_seconds / compared_seconds * 100, 1) if compared_seconds else None
+    percent_below = round(below_seconds / compared_seconds * 100, 1) if compared_seconds else None
+    last_synced_at = max(
+        (
+            record.last_synced_at
+            for record in [*records, *([resting_record] if resting_record else [])]
+        ),
+        default=None,
+    )
+
+    return {
+        "heartRateSamples": [
+            {"observedAt": observed_at, "beatsPerMinute": beats_per_minute}
+            for observed_at, beats_per_minute in samples
+        ],
+        "averageSleepingHeartRate": average,
+        "restingHeartRate": resting_heart_rate,
+        "percentAboveResting": percent_above,
+        "percentBelowResting": percent_below,
+        "heartRateAvailability": "available" if samples else "not-synced",
+        "heartRateFreshness": _record_freshness(last_synced_at),
+        "heartRateDerivation": (
+            "Calculated by LifeStats from Google Health heart-rate samples across the full "
+            "sleep period. Resting comparison is time-weighted; gaps over 15 minutes are "
+            "excluded."
+        ),
     }
 
 

@@ -488,6 +488,22 @@ export interface components {
             stages: components["schemas"]["SleepStageSegmentResponse"][];
             /** Stagesummary */
             stageSummary: components["schemas"]["SleepStageSummaryResponse"][];
+            /** Heartratesamples */
+            heartRateSamples: components["schemas"]["SleepHeartRateSampleResponse"][];
+            /** Averagesleepingheartrate */
+            averageSleepingHeartRate: number | null;
+            /** Restingheartrate */
+            restingHeartRate: number | null;
+            /** Percentaboveresting */
+            percentAboveResting: number | null;
+            /** Percentbelowresting */
+            percentBelowResting: number | null;
+            /** Heartrateavailability */
+            heartRateAvailability: string;
+            /** Heartratefreshness */
+            heartRateFreshness: string;
+            /** Heartratederivation */
+            heartRateDerivation: string;
             /** Source */
             source: string;
             /** Freshness */
@@ -501,6 +517,16 @@ export interface components {
              * Format: date-time
              */
             lastSyncedAt: string;
+        };
+        /** SleepHeartRateSampleResponse */
+        SleepHeartRateSampleResponse: {
+            /**
+             * Observedat
+             * Format: date-time
+             */
+            observedAt: string;
+            /** Beatsperminute */
+            beatsPerMinute: number;
         };
         /** SleepStageSegmentResponse */
         SleepStageSegmentResponse: {

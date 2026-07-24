@@ -1,3 +1,4 @@
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Insights } from "@/lib/types";
 
 export type RangeKey = "day" | "week" | "month" | "quarter" | "year";
@@ -16,14 +17,19 @@ export function insightsPath(end: string, range: RangeKey): string {
 
 export function rangeStart(end: string, range: RangeKey): string {
   const result = parseDate(end);
-  if (range === "week") result.setUTCDate(result.getUTCDate() - 6);
-  if (range === "month") result.setUTCMonth(result.getUTCMonth() - 1);
-  if (range === "quarter") result.setUTCMonth(result.getUTCMonth() - 3);
-  if (range === "year") result.setUTCFullYear(result.getUTCFullYear() - 1);
+  if (range === "week") {
+    const daysSinceMonday = (result.getUTCDay() + 6) % 7;
+    result.setUTCDate(result.getUTCDate() - daysSinceMonday);
+  }
+  if (range === "month") result.setUTCDate(1);
+  if (range === "quarter") {
+    result.setUTCMonth(Math.floor(result.getUTCMonth() / 3) * 3, 1);
+  }
+  if (range === "year") result.setUTCMonth(0, 1);
   return result.toISOString().slice(0, 10);
 }
 
-export function rangeLabel(insights: Insights): string {
+export function rangeLabel(insights: Pick<Insights, "start" | "end">): string {
   const start = parseDate(insights.start);
   const end = parseDate(insights.end);
   const startLabel = start.toLocaleDateString([], { day: "numeric", month: "short" });
@@ -100,6 +106,100 @@ export function RangeTabs({
       ))}
     </div>
   );
+}
+
+export function DateRangeControls({
+  end,
+  max,
+  onEndChange,
+  onRangeChange,
+  range,
+}: {
+  end: string;
+  max: string;
+  onEndChange: (end: string) => void;
+  onRangeChange: (range: RangeKey) => void;
+  range: RangeKey;
+}) {
+  const canMoveNext = end < max;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <RangeTabs onChange={onRangeChange} value={range} />
+      <div
+        aria-label="Chart period"
+        className="flex min-h-12 items-stretch overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-raised)]"
+        role="group"
+      >
+        <button
+          aria-label={`Previous ${range}`}
+          className="grid min-w-11 place-items-center text-muted transition-colors hover:bg-[var(--surface-inset)] hover:text-foreground"
+          onClick={() => onEndChange(adjacentRangeEnd(end, range, -1, max))}
+          title={`Previous ${range}`}
+          type="button"
+        >
+          <ChevronLeft aria-hidden="true" className="size-5" />
+        </button>
+        <label className="relative flex min-w-44 cursor-pointer items-center justify-center gap-2 border-x border-[var(--border)] px-4 text-sm font-semibold hover:bg-[var(--surface-inset)]">
+          <CalendarDays aria-hidden="true" className="size-4 text-muted" />
+          <span>{periodLabel(end, range)}</span>
+          <input
+            aria-label="Select chart end date"
+            className="absolute inset-0 cursor-pointer opacity-0"
+            max={max}
+            onChange={(event) => {
+              if (event.target.value) {
+                onEndChange(calendarRangeEnd(event.target.value, range, max));
+              }
+            }}
+            type="date"
+            value={end}
+          />
+        </label>
+        <button
+          aria-label={`Next ${range}`}
+          className="grid min-w-11 place-items-center text-muted transition-colors enabled:hover:bg-[var(--surface-inset)] enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={!canMoveNext}
+          onClick={() => onEndChange(adjacentRangeEnd(end, range, 1, max))}
+          title={`Next ${range}`}
+          type="button"
+        >
+          <ChevronRight aria-hidden="true" className="size-5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function calendarRangeEnd(value: string, range: RangeKey, max: string): string {
+  if (range === "day") return minDate(value, max);
+
+  const result = parseDate(rangeStart(value, range));
+  if (range === "week") result.setUTCDate(result.getUTCDate() + 6);
+  if (range === "month") result.setUTCMonth(result.getUTCMonth() + 1, 0);
+  if (range === "quarter") result.setUTCMonth(result.getUTCMonth() + 3, 0);
+  if (range === "year") result.setUTCFullYear(result.getUTCFullYear() + 1, 0, 0);
+  return minDate(result.toISOString().slice(0, 10), max);
+}
+
+function adjacentRangeEnd(
+  value: string,
+  range: RangeKey,
+  direction: -1 | 1,
+  max: string,
+): string {
+  const result = parseDate(direction < 0 ? rangeStart(value, range) : value);
+  result.setUTCDate(result.getUTCDate() + direction);
+  return calendarRangeEnd(result.toISOString().slice(0, 10), range, max);
+}
+
+function periodLabel(end: string, range: RangeKey): string {
+  const start = rangeStart(end, range);
+  return rangeLabel({ start, end });
+}
+
+function minDate(first: string, second: string): string {
+  return first < second ? first : second;
 }
 
 function parseDate(value: string): Date {
