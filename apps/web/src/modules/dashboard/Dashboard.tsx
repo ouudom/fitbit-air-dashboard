@@ -6,11 +6,11 @@ import { useState } from "react";
 import { AppAlert } from "@/components/ui/AppAlert";
 import { AppButton } from "@/components/ui/AppButton";
 import { api } from "@/lib/api";
-import type { Dashboard } from "@/lib/types";
+import type { Dashboard as DashboardData } from "@/lib/types";
 import { Settings } from "@/modules/settings/Settings";
 import { DashboardShell, type DashboardView } from "./layout/DashboardShell";
 import { SleepOverview } from "./views/SleepOverview";
-import { TodayOverview } from "./views/TodayOverview";
+import { DashboardOverview } from "./views/DashboardOverview";
 
 type IntegrationStatus = {
   connected: boolean;
@@ -22,12 +22,12 @@ type IntegrationStatus = {
   tokenExpiresAt?: string | null;
 };
 
-export function TodayDashboard({ email, view }: { email: string; view: DashboardView }) {
+export function Dashboard({ email, view }: { email: string; view: DashboardView }) {
   const client = useQueryClient();
   const [date, setDate] = useState<string>();
   const dashboard = useQuery({
     queryKey: ["dashboard", date ?? "current"],
-    queryFn: () => api<Dashboard>(date ? `/dashboard?date=${date}` : "/dashboard"),
+    queryFn: () => api<DashboardData>(date ? `/dashboard?date=${date}` : "/dashboard"),
     refetchInterval: (query) => {
       const data = query.state.data;
       return data?.sync.some((item) => item.status === "queued" || item.status === "running")
@@ -105,7 +105,7 @@ export function TodayDashboard({ email, view }: { email: string; view: Dashboard
       )}
 
       {data && view === "overview" && (
-        <TodayOverview
+        <DashboardOverview
           connected={integration.data?.connected ?? false}
           connectionLoading={integration.isPending}
           data={data}

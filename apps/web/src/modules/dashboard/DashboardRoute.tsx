@@ -6,8 +6,8 @@ import { AppAlert } from "@/components/ui/AppAlert";
 import { ApiError, api } from "@/lib/api";
 import type { Session } from "@/lib/types";
 import { AuthScreen } from "@/modules/auth/AuthScreen";
+import { Dashboard } from "./Dashboard";
 import type { DashboardView } from "./layout/DashboardShell";
-import { TodayDashboard } from "./TodayDashboard";
 
 export function DashboardRoute({ view }: { view: DashboardView }) {
   const session = useQuery({
@@ -35,5 +35,5 @@ export function DashboardRoute({ view }: { view: DashboardView }) {
       </main>
     );
   }
-  return <TodayDashboard email={session.data.user.email} view={view} />;
+  return <Dashboard email={session.data.user.email} view={view} />;
 }

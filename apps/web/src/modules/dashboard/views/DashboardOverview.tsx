@@ -8,7 +8,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { Dashboard } from "@/lib/types";
 import { MetricCard } from "../components/MetricCard";
 
-type TodayOverviewProps = {
+type DashboardOverviewProps = {
   connected: boolean;
   connectionLoading: boolean;
   data: Dashboard;
@@ -19,7 +19,7 @@ type TodayOverviewProps = {
   syncing: boolean;
 };
 
-export function TodayOverview({
+export function DashboardOverview({
   connected,
   connectionLoading,
   data,
@@ -28,7 +28,7 @@ export function TodayOverview({
   onSync,
   syncError,
   syncing,
-}: TodayOverviewProps) {
+}: DashboardOverviewProps) {
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-6">
       <PageHeader
