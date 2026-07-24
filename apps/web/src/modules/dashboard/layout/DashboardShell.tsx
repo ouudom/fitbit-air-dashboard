@@ -1,4 +1,12 @@
 import { Avatar, Chip, Separator, Surface, Typography } from "@heroui/react";
+import {
+  Droplet,
+  Footprints,
+  House,
+  Moon,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -15,12 +23,12 @@ const navigation: Array<{
   id: DashboardView;
   href: string;
   label: string;
-  icon: string;
+  icon: LucideIcon;
 }> = [
-  { id: "overview", href: "/dashboard", label: "Dashboard", icon: "⌂" },
-  { id: "steps", href: "/steps", label: "Steps", icon: "↗" },
-  { id: "sleep", href: "/sleep", label: "Sleep", icon: "☾" },
-  { id: "water-intake", href: "/water-intake", label: "Water intake", icon: "◉" },
+  { id: "overview", href: "/dashboard", label: "Dashboard", icon: House },
+  { id: "steps", href: "/steps", label: "Steps", icon: Footprints },
+  { id: "sleep", href: "/sleep", label: "Sleep", icon: Moon },
+  { id: "water-intake", href: "/water-intake", label: "Water intake", icon: Droplet },
 ];
 
 function navigationClass(active: boolean): string {
@@ -57,19 +65,20 @@ export function DashboardShell({
           <Separator />
 
           <nav className="grid flex-1 content-start gap-1 px-3 py-2" aria-label="Primary">
-            {navigation.map((item) => (
-              <Link
-                aria-current={activeView === item.id ? "page" : undefined}
-                className={navigationClass(activeView === item.id)}
-                href={item.href}
-                key={item.id}
-              >
-                <span className="text-lg" aria-hidden="true">
-                  {item.icon}
-                </span>
-                {item.label}
-              </Link>
-            ))}
+            {navigation.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  aria-current={activeView === item.id ? "page" : undefined}
+                  className={navigationClass(activeView === item.id)}
+                  href={item.href}
+                  key={item.id}
+                >
+                  <Icon className="size-5 shrink-0" aria-hidden="true" />
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
 
           <div className="px-3 pb-3">
@@ -78,9 +87,7 @@ export function DashboardShell({
               className={navigationClass(activeView === "settings")}
               href="/settings"
             >
-              <span className="text-lg" aria-hidden="true">
-                ⚙
-              </span>
+              <Settings className="size-5 shrink-0" aria-hidden="true" />
               Settings
             </Link>
           </div>
@@ -121,7 +128,7 @@ export function DashboardShell({
           aria-label="Settings"
           href="/settings"
         >
-          ⚙
+          <Settings className="size-5" aria-hidden="true" />
         </Link>
       </Surface>
 
@@ -133,21 +140,22 @@ export function DashboardShell({
         className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 rounded-none border-t border-border pb-[env(safe-area-inset-bottom)] lg:hidden"
         variant="secondary"
       >
-        {navigation.map((item) => (
-          <Link
-            aria-current={activeView === item.id ? "page" : undefined}
-            className={`grid min-h-16 place-items-center content-center gap-1 text-xs ${
-              activeView === item.id ? "text-accent" : "text-muted"
-            }`}
-            href={item.href}
-            key={item.id}
-          >
-            <span className="text-lg" aria-hidden="true">
-              {item.icon}
-            </span>
-            {item.label}
-          </Link>
-        ))}
+        {navigation.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link
+              aria-current={activeView === item.id ? "page" : undefined}
+              className={`grid min-h-16 place-items-center content-center gap-1 text-xs ${
+                activeView === item.id ? "text-accent" : "text-muted"
+              }`}
+              href={item.href}
+              key={item.id}
+            >
+              <Icon className="size-5" aria-hidden="true" />
+              {item.label}
+            </Link>
+          );
+        })}
       </Surface>
     </div>
   );

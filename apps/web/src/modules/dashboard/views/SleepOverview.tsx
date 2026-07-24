@@ -2,6 +2,7 @@
 
 import { Card, Chip, Surface, Typography } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
+import { Moon } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 import { EvilAnimatedLineChart } from "@/components/charts/EvilCharts";
@@ -66,7 +67,7 @@ export function SleepOverview({
               <Card.Content>
                 <EmptyContent
                   description="Try syncing Google Health or selecting another date."
-                  icon="☾"
+                  icon={<Moon className="size-6" />}
                   title="No sleep session synced"
                 />
               </Card.Content>
@@ -478,7 +479,7 @@ function SleepSessions({
                   variant="tertiary"
                   aria-hidden="true"
                 >
-                  ☾
+                  <Moon className="size-5" />
                 </Surface>
                 <div className="min-w-0">
                   <Typography weight="semibold">{session.title}</Typography>
@@ -500,7 +501,7 @@ function SleepSessions({
         ) : (
           <EmptyContent
             description="No additional sessions were found for this date."
-            icon="☾"
+            icon={<Moon className="size-6" />}
             title="No session in timeline"
           />
         )}

@@ -1,4 +1,5 @@
 import { buttonVariants, Card, Chip, Typography } from "@heroui/react";
+import { RefreshCw } from "lucide-react";
 import { AppAlert } from "@/components/ui/AppAlert";
 import { AppButton } from "@/components/ui/AppButton";
 import { EmptyContent } from "@/components/ui/EmptyContent";
@@ -42,9 +43,10 @@ export function DashboardOverview({
               isPending={syncing}
               onPress={onSync}
             >
-              <span className={`text-lg leading-none ${syncing ? "animate-spin" : ""}`} aria-hidden="true">
-                ↻
-              </span>
+              <RefreshCw
+                className={`size-4 ${syncing ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              />
               {syncing ? "Syncing…" : connected ? "Sync data" : "Connect to sync"}
             </AppButton>
           </>

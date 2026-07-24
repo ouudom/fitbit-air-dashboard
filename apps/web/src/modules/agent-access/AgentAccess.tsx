@@ -2,6 +2,7 @@
 
 import { Card, Checkbox, Chip, Spinner, Surface, Typography } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { KeyRound } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { AppAlert } from "@/components/ui/AppAlert";
 import { AppButton } from "@/components/ui/AppButton";
@@ -348,7 +349,7 @@ export function AgentAccess() {
             {tokens.data?.length === 0 && (
               <EmptyContent
                 description="Create one when connecting an MCP client."
-                icon="⌘"
+                icon={<KeyRound className="size-6" />}
                 title="No MCP tokens"
               />
             )}
